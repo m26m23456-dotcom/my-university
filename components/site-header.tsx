@@ -71,7 +71,7 @@ export function SiteHeader() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {user.role === 'owner' && (
-                  <DropdownMenuItem onClick={() => router.push('/admin')}>
+                  <DropdownMenuItem render={<Link href="/admin" />}>
                     <LayoutDashboard aria-hidden="true" />
                     لوحة التحكم
                   </DropdownMenuItem>

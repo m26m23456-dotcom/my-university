@@ -71,7 +71,7 @@ export function SiteHeader() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {user.role === 'owner' && (
-                  <DropdownMenuItem render={<Link href="/admin" />}>
+                  <DropdownMenuItem onClick={() => (window.location.href = '/admin')}>
                     <LayoutDashboard aria-hidden="true" />
                     لوحة التحكم
                   </DropdownMenuItem>

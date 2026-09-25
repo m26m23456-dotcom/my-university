@@ -1,5 +1,4 @@
-const CACHE = 'my-university-v1'
-const OFFLINE_URL = '/'
+const CACHE = 'my-university-v2'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -23,13 +22,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET' || request.mode !== 'navigate') return
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const copy = response.clone()
-        caches.open(CACHE).then((cache) => cache.put(OFFLINE_URL, copy))
-        return response
-      })
-      .catch(() => caches.match(OFFLINE_URL)),
+    fetch(request).catch(() => caches.match('/logo.png').then(() => new Response('offline', { status: 503 }))),
   )
 })
 

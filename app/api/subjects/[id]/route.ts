@@ -11,7 +11,11 @@ type Ctx = { params: Promise<{ id: string }> }
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   await requirePermission('materials', 'edit')
   const id = Number((await ctx.params).id)
-  const { name } = await readJson<{ name?: string }>(req)
+  const { name, sortOrder } = await readJson<{ name?: string; sortOrder?: number }>(req)
+  if (typeof sortOrder === 'number') {
+    await db.update(subjects).set({ sortOrder }).where(eq(subjects.id, id))
+    return NextResponse.json({ ok: true })
+  }
   const clean = typeof name === 'string' ? name.trim().slice(0, 80) : ''
   if (!clean) throw new HttpError(400, 'أدخل اسم المادة')
   await db.update(subjects).set({ name: clean }).where(eq(subjects.id, id))

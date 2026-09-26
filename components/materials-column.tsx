@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   BookMarked,
   ChevronLeft,
   Loader2,
@@ -58,6 +60,18 @@ export function MaterialsColumn({ query }: { query: string }) {
   const allNames = new Map<number, string>()
   for (const s of [...(course1.data?.subjects ?? []), ...(course2.data?.subjects ?? [])]) {
     allNames.set(s.id, `${settings.courses[s.course as 1 | 2]} · ${s.name}`)
+  }
+
+  async function moveSubject(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= subjects.length) return
+    const reordered = [...subjects]
+    const [item] = reordered.splice(index, 1)
+    reordered.splice(targetIndex, 0, item)
+    await run(
+      () => Promise.all(reordered.map((s, i) => api(`/api/subjects/${s.id}`, 'PATCH', { sortOrder: i }))),
+      'تم تحديث الترتيب',
+    )
   }
 
   async function run(action: () => Promise<unknown>, success: string) {
@@ -185,7 +199,7 @@ export function MaterialsColumn({ query }: { query: string }) {
           </div>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {subjects.map((s) => (
+            {subjects.map((s, index) => (
               <li key={s.id} className="group/subject relative">
                 <button
                   type="button"
@@ -202,12 +216,32 @@ export function MaterialsColumn({ query }: { query: string }) {
                     </span>
                   </span>
                   <ChevronLeft
-                    className={cn('size-4 shrink-0 text-muted-foreground', canManage && 'ml-7')}
+                    className={cn('size-4 shrink-0 text-muted-foreground', canManage && 'ml-24')}
                     aria-hidden="true"
                   />
                 </button>
                 {canManage && (
-                  <div className="absolute top-1/2 left-2 -translate-y-1/2">
+                  <div className="absolute top-1/2 left-2 flex -translate-y-1/2 items-center gap-0.5">
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-muted-foreground"
+                      aria-label={`نقل ${s.name} للأعلى`}
+                      disabled={index === 0 || busy}
+                      onClick={() => moveSubject(index, -1)}
+                    >
+                      <ArrowUp aria-hidden="true" />
+                    </Button>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-muted-foreground"
+                      aria-label={`نقل ${s.name} للأسفل`}
+                      disabled={index === subjects.length - 1 || busy}
+                      onClick={() => moveSubject(index, 1)}
+                    >
+                      <ArrowDown aria-hidden="true" />
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={

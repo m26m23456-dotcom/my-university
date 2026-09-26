@@ -19,12 +19,17 @@ async function loadPost(ctx: Ctx) {
 
 export const PATCH = handle(async (req: Request, ctx: Ctx) => {
   const post = await loadPost(ctx)
-  const body = await readJson<{ body?: string; pinned?: boolean }>(req)
+  const body = await readJson<{ body?: string; pinned?: boolean; createdAt?: string }>(req)
 
   if (typeof body.pinned === 'boolean') {
     await requirePermission(post.section, 'pin')
     await db.update(posts).set({ pinned: body.pinned }).where(eq(posts.id, post.id))
   }
+  if (typeof body.createdAt === 'string') {
+    await requirePermission(post.section, 'edit')
+    await db.update(posts).set({ createdAt: new Date(body.createdAt) }).where(eq(posts.id, post.id))
+  }
+
   if (typeof body.body === 'string') {
     await requirePermission(post.section, 'edit')
     await db

@@ -2,11 +2,12 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { Inbox, Loader2, Pin, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX } from 'lucide-react'
 import { useApp } from '@/components/app-provider'
 import { Composer } from '@/components/composer'
 import { PostBubble } from '@/components/post-bubble'
-import { fetcher } from '@/lib/fetcher'
+import { api, fetcher } from '@/lib/fetcher'
+import { Button } from '@/components/ui/button'
 import { can, type Post, type Section } from '@/lib/types'
 
 const dayFormat = new Intl.DateTimeFormat('ar-IQ', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -67,6 +68,20 @@ export function Feed({
     setPinIndex((i) => i + 1)
   }
 
+  async function movePost(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= posts.length) return
+    const a = posts[index]
+    const b = posts[targetIndex]
+    await Promise.all([
+      api(`/api/posts/${a.id}`, 'PATCH', { createdAt: b.createdAt }),
+      api(`/api/posts/${b.id}`, 'PATCH', { createdAt: a.createdAt }),
+    ])
+    mutate()
+  }
+
+  const canManagePosts = can(user, section, 'edit')
+
   const showComposer = allowCompose && !query && can(user, section, 'post')
 
   return (
@@ -123,6 +138,17 @@ export function Feed({
                     </span>
                   </div>
                 )}
+                <div className="flex items-start gap-1">
+                  {canManagePosts && !query && (
+                    <div className="mt-1 flex shrink-0 flex-col gap-0.5">
+                      <Button size="icon-xs" variant="ghost" className="text-muted-foreground" aria-label="نقل للأعلى" disabled={i === 0} onClick={() => movePost(i, -1)}>
+                        <ArrowUp aria-hidden="true" />
+                      </Button>
+                      <Button size="icon-xs" variant="ghost" className="text-muted-foreground" aria-label="نقل للأسفل" disabled={i === posts.length - 1} onClick={() => movePost(i, 1)}>
+                        <ArrowDown aria-hidden="true" />
+                      </Button>
+                    </div>
+                  )}
                 <PostBubble
                   post={post}
                   onChanged={() => mutate()}
@@ -131,6 +157,7 @@ export function Feed({
                     query && post.subjectId ? subjectNames?.get(post.subjectId) : undefined
                   }
                 />
+                </div>
               </Fragment>
             )
           })

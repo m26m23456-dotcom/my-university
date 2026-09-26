@@ -7,6 +7,7 @@ import { LayoutDashboard, LogIn, LogOut, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp } from '@/components/app-provider'
 import { InstallButton } from '@/components/install-button'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -54,7 +55,8 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
-          <InstallButton />
+          <ThemeToggle />
+            <InstallButton />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger

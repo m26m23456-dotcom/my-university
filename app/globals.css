@@ -93,3 +93,28 @@
     scrollbar-color: color-mix(in oklch, var(--brand-primary) 25%, transparent) transparent;
   }
 }
+
+.dark {
+  color-scheme: dark;
+  --background: #14181a;
+  --foreground: #e7e9e7;
+  --card: #1c2124;
+  --card-foreground: #e7e9e7;
+  --popover: #1c2124;
+  --popover-foreground: #e7e9e7;
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: color-mix(in oklch, var(--brand-primary) 22%, #1c2124);
+  --secondary-foreground: #e7e9e7;
+  --muted: #23282b;
+  --muted-foreground: #9aa3a3;
+  --accent: color-mix(in oklch, var(--brand-primary) 25%, #1c2124);
+  --accent-foreground: #e7e9e7;
+  --gold: var(--brand-accent);
+  --destructive: #e5695c;
+  --border: #2c3235;
+  --input: #2c3235;
+  --ring: var(--brand-primary);
+  --chat: #1a1f21;
+  --bubble: #23282b;
+}

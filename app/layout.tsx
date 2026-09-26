@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { IBM_Plex_Sans_Arabic } from 'next/font/google'
 import type { CSSProperties } from 'react'
+import { ThemeProvider } from 'next-themes'
 import { AppProvider } from '@/components/app-provider'
 import { PushProvider } from '@/components/push-provider'
 import { PwaRegister } from '@/components/pwa-register'
@@ -35,7 +36,7 @@ export async function generateViewport(): Promise<Viewport> {
   const settings = await getSettings()
   return {
     themeColor: settings.colors.primary,
-    colorScheme: 'light',
+    colorScheme: 'light dark',
     width: 'device-width',
     initialScale: 1,
     viewportFit: 'cover',
@@ -55,12 +56,14 @@ export default async function RootLayout({
   } as CSSProperties
 
   return (
-    <html lang="ar" dir="rtl" className={arabic.variable} style={brandVars}>
+    <html lang="ar" dir="rtl" className={arabic.variable} style={brandVars} suppressHydrationWarning>
       <body className="min-h-dvh antialiased">
-        <AppProvider initialSettings={settings} initialUser={user}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          <AppProvider initialSettings={settings} initialUser={user}>
           <PushProvider>{children}</PushProvider>
         </AppProvider>
         <Toaster position="top-center" dir="rtl" />
+        </ThemeProvider>
         <PwaRegister />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

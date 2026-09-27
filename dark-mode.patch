@@ -1,0 +1,148 @@
+diff --git a/app/globals.css b/app/globals.css
+index d5c4f18..1d0cd09 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -67,6 +67,31 @@
+   --radius: 0.75rem;
+ }
+ 
++.dark {
++  color-scheme: dark;
++  --background: #14181a;
++  --foreground: #e7e9e7;
++  --card: #1c2124;
++  --card-foreground: #e7e9e7;
++  --popover: #1c2124;
++  --popover-foreground: #e7e9e7;
++  --primary: var(--brand-primary);
++  --primary-foreground: #ffffff;
++  --secondary: color-mix(in oklch, var(--brand-primary) 22%, #1c2124);
++  --secondary-foreground: #e7e9e7;
++  --muted: #23282b;
++  --muted-foreground: #9aa3a3;
++  --accent: color-mix(in oklch, var(--brand-primary) 25%, #1c2124);
++  --accent-foreground: #e7e9e7;
++  --gold: var(--brand-accent);
++  --destructive: #e5695c;
++  --border: #2c3235;
++  --input: #2c3235;
++  --ring: var(--brand-primary);
++  --chat: #1a1f21;
++  --bubble: #23282b;
++}
++
+ @layer base {
+   * {
+     @apply border-border outline-ring/50;
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 27d1ffc..b429cad 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,6 +1,7 @@
+ import { Analytics } from '@vercel/analytics/next'
+ import type { Metadata, Viewport } from 'next'
+ import { IBM_Plex_Sans_Arabic } from 'next/font/google'
++import { ThemeProvider } from 'next-themes'
+ import type { CSSProperties } from 'react'
+ import { AppProvider } from '@/components/app-provider'
+ import { PushProvider } from '@/components/push-provider'
+@@ -35,7 +36,7 @@ export async function generateViewport(): Promise<Viewport> {
+   const settings = await getSettings()
+   return {
+     themeColor: settings.colors.primary,
+-    colorScheme: 'light',
++    colorScheme: 'light dark',
+     width: 'device-width',
+     initialScale: 1,
+     viewportFit: 'cover',
+@@ -55,12 +56,14 @@ export default async function RootLayout({
+   } as CSSProperties
+ 
+   return (
+-    <html lang="ar" dir="rtl" className={arabic.variable} style={brandVars}>
++    <html lang="ar" dir="rtl" className={arabic.variable} style={brandVars} suppressHydrationWarning>
+       <body className="min-h-dvh antialiased">
+-        <AppProvider initialSettings={settings} initialUser={user}>
+-          <PushProvider>{children}</PushProvider>
+-        </AppProvider>
+-        <Toaster position="top-center" dir="rtl" />
++        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
++          <AppProvider initialSettings={settings} initialUser={user}>
++            <PushProvider>{children}</PushProvider>
++          </AppProvider>
++          <Toaster position="top-center" dir="rtl" />
++        </ThemeProvider>
+         <PwaRegister />
+         {process.env.NODE_ENV === 'production' && <Analytics />}
+       </body>
+diff --git a/components/site-header.tsx b/components/site-header.tsx
+index 1de06ed..7f88f54 100644
+--- a/components/site-header.tsx
++++ b/components/site-header.tsx
+@@ -7,6 +7,7 @@ import { LayoutDashboard, LogIn, LogOut, UserRound } from 'lucide-react'
+ import { toast } from 'sonner'
+ import { useApp } from '@/components/app-provider'
+ import { InstallButton } from '@/components/install-button'
++import { ThemeToggle } from '@/components/theme-toggle'
+ import { Button, buttonVariants } from '@/components/ui/button'
+ import {
+   DropdownMenu,
+@@ -54,6 +55,7 @@ export function SiteHeader() {
+         </Link>
+ 
+         <div className="flex shrink-0 items-center gap-2">
++          <ThemeToggle />
+           <InstallButton />
+           {user ? (
+             <DropdownMenu>
+@@ -71,7 +73,7 @@ export function SiteHeader() {
+                 </DropdownMenuLabel>
+                 <DropdownMenuSeparator />
+                 {user.role === 'owner' && (
+-                  <DropdownMenuItem onClick={() => router.push('/admin')}>
++                  <DropdownMenuItem render={<Link href="/admin" />}>
+                     <LayoutDashboard aria-hidden="true" />
+                     لوحة التحكم
+                   </DropdownMenuItem>
+diff --git a/components/theme-toggle.tsx b/components/theme-toggle.tsx
+new file mode 100644
+index 0000000..47a1ecc
+--- /dev/null
++++ b/components/theme-toggle.tsx
+@@ -0,0 +1,36 @@
++'use client'
++
++import { useEffect, useState } from 'react'
++import { Moon, Sun } from 'lucide-react'
++import { useTheme } from 'next-themes'
++import { Button } from '@/components/ui/button'
++
++export function ThemeToggle() {
++  const { resolvedTheme, setTheme } = useTheme()
++  const [mounted, setMounted] = useState(false)
++
++  useEffect(() => {
++    setMounted(true)
++  }, [])
++
++  if (!mounted) {
++    return (
++      <Button variant="outline" size="icon" aria-label="تبديل المظهر" disabled>
++        <Sun aria-hidden="true" />
++      </Button>
++    )
++  }
++
++  const isDark = resolvedTheme === 'dark'
++
++  return (
++    <Button
++      variant="outline"
++      size="icon"
++      aria-label={isDark ? 'التبديل إلى المظهر الفاتح' : 'التبديل إلى المظهر الداكن'}
++      onClick={() => setTheme(isDark ? 'light' : 'dark')}
++    >
++      {isDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
++    </Button>
++  )
++}

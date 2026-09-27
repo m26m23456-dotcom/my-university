@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { asc, eq } from 'drizzle-orm'

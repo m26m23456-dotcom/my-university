@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import useSWR from 'swr'
 import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX } from 'lucide-react'
 import { useApp } from '@/components/app-provider'
@@ -23,12 +23,18 @@ export function Feed({
   query = '',
   subjectNames,
   allowCompose = true,
+  transform,
+  footer,
+  emptyText,
 }: {
   section: Section
   subjectId?: number
   query?: string
   subjectNames?: Map<number, string>
   allowCompose?: boolean
+  transform?: (posts: Post[]) => Post[]
+  footer?: ReactNode
+  emptyText?: string
 }) {
   const { user } = useApp()
   const params = new URLSearchParams({ section })
@@ -40,7 +46,8 @@ export function Feed({
     refreshInterval: 30000,
     keepPreviousData: true,
   })
-  const posts = data?.posts ?? []
+  const rawPosts = data?.posts ?? []
+  const posts = transform ? transform(rawPosts) : rawPosts
   const pinned = posts.filter((p) => p.pinned)
   const [pinIndex, setPinIndex] = useState(0)
   const [highlighted, setHighlighted] = useState<number | null>(null)
@@ -124,7 +131,7 @@ export function Feed({
             ) : (
               <Inbox className="size-8 opacity-60" aria-hidden="true" />
             )}
-            {query ? 'لا توجد نتائج مطابقة لبحثك' : 'لا توجد منشورات بعد'}
+            {query ? 'لا توجد نتائج مطابقة لبحثك' : (emptyText ?? 'لا توجد منشورات بعد')}
           </div>
         ) : (
           posts.map((post, i) => {
@@ -165,6 +172,7 @@ export function Feed({
       </div>
 
       {showComposer && <Composer section={section} subjectId={subjectId} onPosted={() => mutate()} />}
+      {footer}
     </div>
   )
 }

@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { useApp } from '@/components/app-provider'
 import { EditableTitle } from '@/components/editable-title'
 import { Feed } from '@/components/feed'
+import { SubjectView } from '@/components/subject-view'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -38,6 +39,14 @@ import { can, type Subject } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type SubjectsResponse = { subjects: Subject[] }
+
+function postCountLabel(n: number) {
+  if (!n) return 'لا توجد منشورات'
+  if (n === 1) return 'منشور واحد'
+  if (n === 2) return 'منشوران'
+  if (n <= 10) return `${n} منشورات`
+  return `${n} منشوراً`
+}
 
 export function MaterialsColumn({ query }: { query: string }) {
   const { settings, user, updateSettings } = useApp()
@@ -106,7 +115,7 @@ export function MaterialsColumn({ query }: { query: string }) {
             <span className="text-xs text-muted-foreground">{settings.courses[course]}</span>
           </div>
         </div>
-        <Feed section="materials" subjectId={selected.id} />
+        <SubjectView subjectId={selected.id} />
       </div>
     )
   }
@@ -212,7 +221,7 @@ export function MaterialsColumn({ query }: { query: string }) {
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-semibold">{s.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {s.postCount ? `${s.postCount} منشور` : 'لا توجد منشورات'}
+                      {postCountLabel(s.postCount)}
                     </span>
                   </span>
                   <ChevronLeft

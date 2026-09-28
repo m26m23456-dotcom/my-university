@@ -1,4 +1,4 @@
-const CACHE = 'my-university-v2'
+const CACHE = 'my-university-v3'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -18,12 +18,9 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-self.addEventListener('fetch', (event) => {
-  const request = event.request
-  if (request.method !== 'GET' || request.mode !== 'navigate') return
-  event.respondWith(
-    fetch(request).catch(() => caches.match('/logo.png').then(() => new Response('offline', { status: 503 }))),
-  )
+self.addEventListener('fetch', () => {
+  // لا نعترض طلبات فتح الصفحات إطلاقًا — نترك المتصفح يتولى الشبكة وإعادة
+  // المحاولة تلقائيًا، وهذا أوثق من أي منطق نكتبه هنا.
 })
 
 self.addEventListener('push', (event) => {

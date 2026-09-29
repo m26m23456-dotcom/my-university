@@ -73,8 +73,9 @@ export function SiteHeader() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {user.role === 'owner' && (
-                  <DropdownMenuItem
-                    onClick={() => router.push('/admin')}>
+                  // رابط طبيعي بلا أي جافاسكربت وسيط — يتعامل معه المتصفح
+                  // تمامًا كأي رابط عادي بالضبط مثل كتابة الرابط يدويًا
+                  <DropdownMenuItem render={<a href="/admin" rel="noreferrer" />}>
                     <LayoutDashboard aria-hidden="true" />
                     لوحة التحكم
                   </DropdownMenuItem>

@@ -74,13 +74,7 @@ export function SiteHeader() {
                 <DropdownMenuSeparator />
                 {user.role === 'owner' && (
                   <DropdownMenuItem
-                    onClick={() => {
-                      // تأخير بسيط يعطي القائمة المنسدلة فرصة تغلق تمامًا
-                      // قبل بدء التنقّل، لتفادي تعارض التوقيت على الشبكات البطيئة
-                      setTimeout(() => {
-                        window.location.href = '/admin'
-                      }, 80)
-                    }}
+                    onClick={() => router.push('/admin')}>
                   >
                     <LayoutDashboard aria-hidden="true" />
                     لوحة التحكم

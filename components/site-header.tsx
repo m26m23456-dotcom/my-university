@@ -75,7 +75,6 @@ export function SiteHeader() {
                 {user.role === 'owner' && (
                   <DropdownMenuItem
                     onClick={() => router.push('/admin')}>
-                  >
                     <LayoutDashboard aria-hidden="true" />
                     لوحة التحكم
                   </DropdownMenuItem>

@@ -4,6 +4,14 @@ import { useRef, useState } from 'react'
 import { FileText, Loader2, Paperclip, SendHorizontal, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { api, formatBytes, uploadFile } from '@/lib/fetcher'
 import type { Section } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -24,8 +32,21 @@ export function Composer({
   const [text, setText] = useState('')
   const [pending, setPending] = useState<Pending[]>([])
   const [sending, setSending] = useState(false)
+  const [reminderPostId, setReminderPostId] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
+
+  async function answerReminder(activate: boolean) {
+    const postId = reminderPostId
+    setReminderPostId(null)
+    if (!postId) return
+    try {
+      await api('/api/study/activate', 'POST', { postId, activate })
+      if (activate) toast.success('تم تفعيل تذكير الدراسة لهذا اليوم')
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
 
   function addFiles(list: FileList | null) {
     if (!list) return
@@ -60,12 +81,18 @@ export function Composer({
         )
         fileIds.push(id)
       }
-      await api('/api/posts', 'POST', { section, subjectId, body: text, fileIds })
+      const res = await api<{ id: number; reminderPrompt?: boolean }>('/api/posts', 'POST', {
+        section,
+        subjectId,
+        body: text,
+        fileIds,
+      })
       pending.forEach((p) => p.preview && URL.revokeObjectURL(p.preview))
       setPending([])
       setText('')
       if (textRef.current) textRef.current.style.height = ''
       onPosted()
+      if (res.reminderPrompt) setReminderPostId(res.id)
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -178,6 +205,24 @@ export function Composer({
           )}
         </Button>
       </div>
+
+      <Dialog open={reminderPostId !== null} onOpenChange={(open) => !open && answerReminder(false)}>
+        <DialogContent dir="rtl" className="text-right">
+          <DialogHeader>
+            <DialogTitle>تذكير الدراسة</DialogTitle>
+            <DialogDescription>
+              هل تريد تفعيل التذكير اليوم؟ سيصل سؤال &quot;هل درست اليوم؟&quot; للمشرفين والمالك بين
+              الساعة 12 ظهراً و 3 فجراً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => answerReminder(false)}>
+              لا
+            </Button>
+            <Button onClick={() => answerReminder(true)}>اي</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

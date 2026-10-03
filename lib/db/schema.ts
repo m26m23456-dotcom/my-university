@@ -101,3 +101,31 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   topics: text('topics').array().notNull().default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// يوم واحد فعّال كـ"تذكير دراسة" (نافذة 12 ظهراً - 3 فجراً) مرتبط بتبليغ التحضير
+export const studyReminders = pgTable('study_reminders', {
+  day: date('day', { mode: 'string' }).primaryKey(),
+  postId: integer('post_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// سجلّ كل قرار (تفعيل/عدم تفعيل) يختاره الناشر عند ظهور نافذة التأكيد
+export const reminderDecisions = pgTable('reminder_decisions', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  day: date('day', { mode: 'string' }).notNull(),
+  decision: text('decision').notNull(), // 'yes' | 'no'
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// تصويت كل مستخدم (هل درست اليوم؟) ليوم تذكير معيّن
+export const studyVotes = pgTable(
+  'study_votes',
+  {
+    userId: text('user_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    status: text('status').notNull(), // 'yes' | 'no'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day] })],
+)

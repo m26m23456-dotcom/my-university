@@ -1,0 +1,633 @@
+diff --git a/app/api/posts/route.ts b/app/api/posts/route.ts
+index f4d73d0..6016961 100644
+--- a/app/api/posts/route.ts
++++ b/app/api/posts/route.ts
+@@ -9,6 +9,7 @@ import { handle, readJson } from '@/lib/api'
+ import { listPosts } from '@/lib/posts'
+ import { notifySection } from '@/lib/push'
+ import { getSettings } from '@/lib/settings'
++import { matchesStudyKeyword } from '@/lib/study'
+ import { isSection } from '@/lib/types'
+ 
+ export const GET = handle(async (req: NextRequest) => {
+@@ -80,5 +81,7 @@ export const POST = handle(async (req: Request) => {
+     })
+   })
+ 
+-  return NextResponse.json({ id: post.id })
++  const reminderPrompt = section === 'announcements' && matchesStudyKeyword(text)
++
++  return NextResponse.json({ id: post.id, reminderPrompt })
+ })
+diff --git a/app/api/study/activate/route.ts b/app/api/study/activate/route.ts
+new file mode 100644
+index 0000000..3d2da4d
+--- /dev/null
++++ b/app/api/study/activate/route.ts
+@@ -0,0 +1,29 @@
++export const dynamic = 'force-dynamic'
++
++import { NextResponse } from 'next/server'
++import { db } from '@/lib/db'
++import { reminderDecisions, studyReminders } from '@/lib/db/schema'
++import { HttpError, requirePermission } from '@/lib/auth'
++import { handle, readJson } from '@/lib/api'
++import { baghdadToday } from '@/lib/study'
++
++export const POST = handle(async (req: Request) => {
++  const user = await requirePermission('announcements', 'post')
++  const body = await readJson<{ postId?: number; activate?: boolean }>(req)
++  const postId = Number(body.postId)
++  if (!postId) throw new HttpError(400, 'طلب غير صالح')
++
++  const day = baghdadToday()
++  const decision = body.activate ? 'yes' : 'no'
++
++  await db.insert(reminderDecisions).values({ userId: user.id, day, decision })
++
++  if (body.activate) {
++    await db
++      .insert(studyReminders)
++      .values({ day, postId })
++      .onConflictDoUpdate({ target: studyReminders.day, set: { postId } })
++  }
++
++  return NextResponse.json({ ok: true })
++})
+diff --git a/app/api/study/stats/route.ts b/app/api/study/stats/route.ts
+new file mode 100644
+index 0000000..1e56252
+--- /dev/null
++++ b/app/api/study/stats/route.ts
+@@ -0,0 +1,64 @@
++export const dynamic = 'force-dynamic'
++
++import { NextResponse, type NextRequest } from 'next/server'
++import { and, gte, lte } from 'drizzle-orm'
++import { db } from '@/lib/db'
++import { appUsers, reminderDecisions, studyReminders, studyVotes } from '@/lib/db/schema'
++import { HttpError, getCurrentUser } from '@/lib/auth'
++import { handle } from '@/lib/api'
++import { baghdadToday, monthRange } from '@/lib/study'
++
++export const GET = handle(async (req: NextRequest) => {
++  const user = await getCurrentUser()
++  if (!user) throw new HttpError(401, 'يجب تسجيل الدخول')
++
++  const month = req.nextUrl.searchParams.get('month') || baghdadToday().slice(0, 7)
++  if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpError(400, 'شهر غير صالح')
++  const { from, to } = monthRange(month)
++
++  const users = await db
++    .select({ id: appUsers.id, displayName: appUsers.displayName, role: appUsers.role })
++    .from(appUsers)
++
++  const reminders = await db
++    .select({ day: studyReminders.day })
++    .from(studyReminders)
++    .where(and(gte(studyReminders.day, from), lte(studyReminders.day, to)))
++  const activeDays = [...new Set(reminders.map((r) => r.day))].sort()
++
++  const decisions = await db
++    .select()
++    .from(reminderDecisions)
++    .where(and(gte(reminderDecisions.day, from), lte(reminderDecisions.day, to)))
++
++  const votes = activeDays.length
++    ? await db
++        .select()
++        .from(studyVotes)
++        .where(and(gte(studyVotes.day, from), lte(studyVotes.day, to)))
++    : []
++
++  const data = users.map((u) => {
++    const userDecisions = decisions.filter((d) => d.userId === u.id)
++    const decisionTotals = {
++      yes: userDecisions.filter((d) => d.decision === 'yes').length,
++      no: userDecisions.filter((d) => d.decision === 'no').length,
++    }
++
++    const days = activeDays.map((day) => {
++      const v = votes.find((vt) => vt.userId === u.id && vt.day === day)
++      const status: 'yes' | 'no' | 'pending' = v ? (v.status as 'yes' | 'no') : 'pending'
++      return { day, status }
++    })
++
++    const totals = {
++      yes: days.filter((d) => d.status === 'yes').length,
++      no: days.filter((d) => d.status === 'no').length,
++      pending: days.filter((d) => d.status === 'pending').length,
++    }
++
++    return { id: u.id, name: u.displayName, role: u.role, decisions: decisionTotals, days, totals }
++  })
++
++  return NextResponse.json({ month, activeDays, users: data })
++})
+diff --git a/app/api/study/today/route.ts b/app/api/study/today/route.ts
+new file mode 100644
+index 0000000..768118d
+--- /dev/null
++++ b/app/api/study/today/route.ts
+@@ -0,0 +1,33 @@
++export const dynamic = 'force-dynamic'
++
++import { NextResponse } from 'next/server'
++import { and, eq } from 'drizzle-orm'
++import { db } from '@/lib/db'
++import { studyReminders, studyVotes } from '@/lib/db/schema'
++import { getCurrentUser } from '@/lib/auth'
++import { handle } from '@/lib/api'
++import { activeCheckinDay } from '@/lib/study'
++
++export const GET = handle(async () => {
++  const user = await getCurrentUser()
++  if (!user) return NextResponse.json({ active: false })
++
++  const day = activeCheckinDay()
++  if (!day) return NextResponse.json({ active: false })
++
++  const reminder = await db
++    .select({ day: studyReminders.day })
++    .from(studyReminders)
++    .where(eq(studyReminders.day, day))
++    .limit(1)
++  if (!reminder[0]) return NextResponse.json({ active: false })
++
++  const vote = await db
++    .select({ status: studyVotes.status })
++    .from(studyVotes)
++    .where(and(eq(studyVotes.userId, user.id), eq(studyVotes.day, day)))
++    .limit(1)
++  if (vote[0]) return NextResponse.json({ active: false })
++
++  return NextResponse.json({ active: true, day })
++})
+diff --git a/app/api/study/vote/route.ts b/app/api/study/vote/route.ts
+new file mode 100644
+index 0000000..5cc900a
+--- /dev/null
++++ b/app/api/study/vote/route.ts
+@@ -0,0 +1,26 @@
++export const dynamic = 'force-dynamic'
++
++import { NextResponse } from 'next/server'
++import { db } from '@/lib/db'
++import { studyVotes } from '@/lib/db/schema'
++import { HttpError, getCurrentUser } from '@/lib/auth'
++import { handle, readJson } from '@/lib/api'
++import { activeCheckinDay } from '@/lib/study'
++
++export const POST = handle(async (req: Request) => {
++  const user = await getCurrentUser()
++  if (!user) throw new HttpError(401, 'يجب تسجيل الدخول')
++
++  const body = await readJson<{ status?: string }>(req)
++  if (body.status !== 'yes' && body.status !== 'no') throw new HttpError(400, 'طلب غير صالح')
++
++  const day = activeCheckinDay()
++  if (!day) throw new HttpError(400, 'لا يوجد تذكير نشط الآن')
++
++  await db
++    .insert(studyVotes)
++    .values({ userId: user.id, day, status: body.status })
++    .onConflictDoUpdate({ target: [studyVotes.userId, studyVotes.day], set: { status: body.status } })
++
++  return NextResponse.json({ ok: true })
++})
+diff --git a/components/composer.tsx b/components/composer.tsx
+index 8b3e5f3..cd8a221 100644
+--- a/components/composer.tsx
++++ b/components/composer.tsx
+@@ -4,6 +4,14 @@ import { useRef, useState } from 'react'
+ import { FileText, Loader2, Paperclip, SendHorizontal, X } from 'lucide-react'
+ import { toast } from 'sonner'
+ import { Button } from '@/components/ui/button'
++import {
++  Dialog,
++  DialogContent,
++  DialogDescription,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++} from '@/components/ui/dialog'
+ import { api, formatBytes, uploadFile } from '@/lib/fetcher'
+ import type { Section } from '@/lib/types'
+ import { cn } from '@/lib/utils'
+@@ -24,9 +32,22 @@ export function Composer({
+   const [text, setText] = useState('')
+   const [pending, setPending] = useState<Pending[]>([])
+   const [sending, setSending] = useState(false)
++  const [reminderPostId, setReminderPostId] = useState<number | null>(null)
+   const inputRef = useRef<HTMLInputElement>(null)
+   const textRef = useRef<HTMLTextAreaElement>(null)
+ 
++  async function answerReminder(activate: boolean) {
++    const postId = reminderPostId
++    setReminderPostId(null)
++    if (!postId) return
++    try {
++      await api('/api/study/activate', 'POST', { postId, activate })
++      if (activate) toast.success('تم تفعيل تذكير الدراسة لهذا اليوم')
++    } catch (error) {
++      toast.error((error as Error).message)
++    }
++  }
++
+   function addFiles(list: FileList | null) {
+     if (!list) return
+     const next: Pending[] = Array.from(list).map((file) => ({
+@@ -60,12 +81,18 @@ export function Composer({
+         )
+         fileIds.push(id)
+       }
+-      await api('/api/posts', 'POST', { section, subjectId, body: text, fileIds })
++      const res = await api<{ id: number; reminderPrompt?: boolean }>('/api/posts', 'POST', {
++        section,
++        subjectId,
++        body: text,
++        fileIds,
++      })
+       pending.forEach((p) => p.preview && URL.revokeObjectURL(p.preview))
+       setPending([])
+       setText('')
+       if (textRef.current) textRef.current.style.height = ''
+       onPosted()
++      if (res.reminderPrompt) setReminderPostId(res.id)
+     } catch (error) {
+       toast.error((error as Error).message)
+     } finally {
+@@ -178,6 +205,24 @@ export function Composer({
+           )}
+         </Button>
+       </div>
++
++      <Dialog open={reminderPostId !== null} onOpenChange={(open) => !open && answerReminder(false)}>
++        <DialogContent dir="rtl" className="text-right">
++          <DialogHeader>
++            <DialogTitle>تذكير الدراسة</DialogTitle>
++            <DialogDescription>
++              هل تريد تفعيل التذكير اليوم؟ سيصل سؤال &quot;هل درست اليوم؟&quot; للمشرفين والمالك بين
++              الساعة 12 ظهراً و 3 فجراً.
++            </DialogDescription>
++          </DialogHeader>
++          <DialogFooter>
++            <Button variant="outline" onClick={() => answerReminder(false)}>
++              لا
++            </Button>
++            <Button onClick={() => answerReminder(true)}>اي</Button>
++          </DialogFooter>
++        </DialogContent>
++      </Dialog>
+     </div>
+   )
+ }
+diff --git a/components/site-header.tsx b/components/site-header.tsx
+index de843e5..3c88d84 100644
+--- a/components/site-header.tsx
++++ b/components/site-header.tsx
+@@ -7,6 +7,8 @@ import { LayoutDashboard, LogIn, LogOut, UserRound } from 'lucide-react'
+ import { toast } from 'sonner'
+ import { useApp } from '@/components/app-provider'
+ import { InstallButton } from '@/components/install-button'
++import { StudyCheck } from '@/components/study-check'
++import { StudyLogDialog } from '@/components/study-log-dialog'
+ import { ThemeToggle } from '@/components/theme-toggle'
+ import { Button, buttonVariants } from '@/components/ui/button'
+ import {
+@@ -36,6 +38,7 @@ export function SiteHeader() {
+ 
+   return (
+     <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/75">
++      {user && <StudyCheck />}
+       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
+         <Link href="/" className="flex min-w-0 items-center gap-3">
+           <Image
+@@ -57,6 +60,7 @@ export function SiteHeader() {
+         <div className="flex shrink-0 items-center gap-2">
+           <ThemeToggle />
+             <InstallButton />
++          {user && <StudyLogDialog />}
+           {user ? (
+             <DropdownMenu>
+               <DropdownMenuTrigger
+diff --git a/components/study-check.tsx b/components/study-check.tsx
+new file mode 100644
+index 0000000..a9f139f
+--- /dev/null
++++ b/components/study-check.tsx
+@@ -0,0 +1,66 @@
++'use client'
++
++import { useState } from 'react'
++import useSWR from 'swr'
++import { toast } from 'sonner'
++import { useApp } from '@/components/app-provider'
++import {
++  Dialog,
++  DialogContent,
++  DialogDescription,
++  DialogFooter,
++  DialogHeader,
++  DialogTitle,
++} from '@/components/ui/dialog'
++import { Button } from '@/components/ui/button'
++import { api, fetcher } from '@/lib/fetcher'
++
++// يظهر لكل مشرف/مالك سؤال "هل درست اليوم؟" مرّة واحدة لكل يوم تذكير نشط،
++// ضمن نافذة 12 ظهراً - 3 فجراً، ويُغلق لهذا المستخدم بعد أن يصوّت.
++export function StudyCheck() {
++  const { user } = useApp()
++  const [dismissed, setDismissed] = useState(false)
++  const [sending, setSending] = useState(false)
++
++  const { data, mutate } = useSWR<{ active: boolean; day?: string }>(
++    user ? '/api/study/today' : null,
++    fetcher,
++    { refreshInterval: 5 * 60 * 1000, revalidateOnFocus: true },
++  )
++
++  const open = Boolean(user && data?.active && !dismissed)
++
++  async function vote(status: 'yes' | 'no') {
++    if (sending) return
++    setSending(true)
++    try {
++      await api('/api/study/vote', 'POST', { status })
++      setDismissed(true)
++      mutate()
++      toast.success(status === 'yes' ? 'تم تسجيل: درستَ اليوم' : 'تم تسجيل: لم تدرس اليوم')
++    } catch (error) {
++      toast.error((error as Error).message)
++    } finally {
++      setSending(false)
++    }
++  }
++
++  return (
++    <Dialog open={open}>
++      <DialogContent dir="rtl" className="text-right" showCloseButton={false}>
++        <DialogHeader>
++          <DialogTitle>هل درست اليوم؟</DialogTitle>
++          <DialogDescription>تم تفعيل تذكير الدراسة اليوم، سجّل إجابتك.</DialogDescription>
++        </DialogHeader>
++        <DialogFooter>
++          <Button variant="outline" disabled={sending} onClick={() => vote('no')}>
++            لم ادرس
++          </Button>
++          <Button disabled={sending} onClick={() => vote('yes')}>
++            نعم درست
++          </Button>
++        </DialogFooter>
++      </DialogContent>
++    </Dialog>
++  )
++}
+diff --git a/components/study-log-dialog.tsx b/components/study-log-dialog.tsx
+new file mode 100644
+index 0000000..2e1dbe8
+--- /dev/null
++++ b/components/study-log-dialog.tsx
+@@ -0,0 +1,146 @@
++'use client'
++
++import { useState } from 'react'
++import useSWR from 'swr'
++import { BookOpenCheck, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
++import { Button } from '@/components/ui/button'
++import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
++import { fetcher } from '@/lib/fetcher'
++import { cn } from '@/lib/utils'
++
++type DayStatus = 'yes' | 'no' | 'pending'
++type UserStats = {
++  id: string
++  name: string
++  role: string
++  decisions: { yes: number; no: number }
++  days: { day: string; status: DayStatus }[]
++  totals: { yes: number; no: number; pending: number }
++}
++type StatsResponse = { month: string; activeDays: string[]; users: UserStats[] }
++
++const monthFormat = new Intl.DateTimeFormat('ar-IQ', { month: 'long', year: 'numeric' })
++const dayFormat = new Intl.DateTimeFormat('ar-IQ', { day: 'numeric', month: 'numeric' })
++
++const STATUS_LABEL: Record<DayStatus, string> = {
++  yes: 'نعم درست',
++  no: 'لم ادرس',
++  pending: 'لم يصوت',
++}
++const STATUS_STYLE: Record<DayStatus, string> = {
++  yes: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
++  no: 'bg-destructive/15 text-destructive',
++  pending: 'bg-muted text-muted-foreground',
++}
++
++function currentMonth() {
++  const now = new Date(Date.now() + 3 * 60 * 60 * 1000)
++  return now.toISOString().slice(0, 7)
++}
++
++function shiftMonth(month: string, delta: number) {
++  const [y, m] = month.split('-').map(Number)
++  const d = new Date(y, m - 1 + delta, 1)
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
++}
++
++export function StudyLogDialog() {
++  const [open, setOpen] = useState(false)
++  const [month, setMonth] = useState(currentMonth)
++
++  const { data, isLoading } = useSWR<StatsResponse>(
++    open ? `/api/study/stats?month=${month}` : null,
++    fetcher,
++  )
++
++  return (
++    <>
++      <Button
++        type="button"
++        variant="outline"
++        size="icon"
++        aria-label="سجل الدراسة"
++        onClick={() => setOpen(true)}
++      >
++        <BookOpenCheck aria-hidden="true" />
++      </Button>
++      <Dialog open={open} onOpenChange={setOpen}>
++        <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto text-right sm:max-w-lg">
++          <DialogHeader>
++            <DialogTitle>سجل الدراسة</DialogTitle>
++          </DialogHeader>
++
++          <div className="flex items-center justify-between gap-2">
++            <Button
++              type="button"
++              size="icon-sm"
++              variant="ghost"
++              aria-label="الشهر السابق"
++              onClick={() => setMonth((m) => shiftMonth(m, -1))}
++            >
++              <ChevronRight aria-hidden="true" />
++            </Button>
++            <span className="text-sm font-medium">{monthFormat.format(new Date(`${month}-01`))}</span>
++            <Button
++              type="button"
++              size="icon-sm"
++              variant="ghost"
++              aria-label="الشهر التالي"
++              disabled={month >= currentMonth()}
++              onClick={() => setMonth((m) => shiftMonth(m, 1))}
++            >
++              <ChevronLeft aria-hidden="true" />
++            </Button>
++          </div>
++
++          {isLoading ? (
++            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
++              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
++              جارٍ التحميل...
++            </div>
++          ) : !data || data.activeDays.length === 0 ? (
++            <p className="py-10 text-center text-sm text-muted-foreground">
++              لا يوجد تذكير دراسة مُفعّل في هذا الشهر
++            </p>
++          ) : (
++            <div className="flex flex-col gap-4">
++              {data.users.map((u) => (
++                <div key={u.id} className="rounded-xl border p-3">
++                  <div className="mb-2 flex items-center justify-between">
++                    <span className="font-medium">{u.name}</span>
++                    <span className="text-xs text-muted-foreground">
++                      {u.role === 'owner' ? 'مالك' : 'مشرف'}
++                    </span>
++                  </div>
++                  <p className="mb-2 text-xs text-muted-foreground">
++                    تفعيل التذكير: <span className="font-medium text-foreground">{u.decisions.yes}</span> اي
++                    {' · '}
++                    <span className="font-medium text-foreground">{u.decisions.no}</span> لا
++                  </p>
++                  <ul className="flex flex-wrap gap-1.5">
++                    {u.days.map((d) => (
++                      <li
++                        key={d.day}
++                        className={cn(
++                          'flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-[0.65rem]',
++                          STATUS_STYLE[d.status],
++                        )}
++                      >
++                        <span className="tabular-nums">{dayFormat.format(new Date(d.day))}</span>
++                        <span>{STATUS_LABEL[d.status]}</span>
++                      </li>
++                    ))}
++                  </ul>
++                  <p className="mt-2 text-xs text-muted-foreground">
++                    إجمالي الشهر: {u.totals.yes} نعم درست · {u.totals.no} لم ادرس · {u.totals.pending} لم
++                    يصوت
++                  </p>
++                </div>
++              ))}
++            </div>
++          )}
++        </DialogContent>
++      </Dialog>
++    </>
++  )
++}
+diff --git a/lib/db/schema.ts b/lib/db/schema.ts
+index 4fcd404..aad52d8 100644
+--- a/lib/db/schema.ts
++++ b/lib/db/schema.ts
+@@ -101,3 +101,31 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
+   topics: text('topics').array().notNull().default([]),
+   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+ })
++
++// يوم واحد فعّال كـ"تذكير دراسة" (نافذة 12 ظهراً - 3 فجراً) مرتبط بتبليغ التحضير
++export const studyReminders = pgTable('study_reminders', {
++  day: date('day', { mode: 'string' }).primaryKey(),
++  postId: integer('post_id').notNull(),
++  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
++})
++
++// سجلّ كل قرار (تفعيل/عدم تفعيل) يختاره الناشر عند ظهور نافذة التأكيد
++export const reminderDecisions = pgTable('reminder_decisions', {
++  id: serial('id').primaryKey(),
++  userId: text('user_id').notNull(),
++  day: date('day', { mode: 'string' }).notNull(),
++  decision: text('decision').notNull(), // 'yes' | 'no'
++  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
++})
++
++// تصويت كل مستخدم (هل درست اليوم؟) ليوم تذكير معيّن
++export const studyVotes = pgTable(
++  'study_votes',
++  {
++    userId: text('user_id').notNull(),
++    day: date('day', { mode: 'string' }).notNull(),
++    status: text('status').notNull(), // 'yes' | 'no'
++    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
++  },
++  (t) => [primaryKey({ columns: [t.userId, t.day] })],
++)
+diff --git a/lib/study.ts b/lib/study.ts
+new file mode 100644
+index 0000000..d01f1a4
+--- /dev/null
++++ b/lib/study.ts
+@@ -0,0 +1,54 @@
++import 'server-only'
++
++// الكلمات التي إذا وردت في نص التبليغ تُعتبر "تحضير/تحظير لبكرة"
++export const STUDY_KEYWORDS = [
++  'باجر تحظير',
++  'باجر تحضير',
++  'تحضير',
++  'تحظير',
++  'تحاظير باجر',
++  'تحاضير باجر',
++]
++
++export function matchesStudyKeyword(text: string): boolean {
++  if (!text) return false
++  return STUDY_KEYWORDS.some((k) => text.includes(k))
++}
++
++// بغداد = UTC+3 طوال السنة (لا يوجد توقيت صيفي)
++const BAGHDAD_OFFSET_MS = 3 * 60 * 60 * 1000
++
++function baghdadNow(): Date {
++  return new Date(Date.now() + BAGHDAD_OFFSET_MS)
++}
++
++function isoDay(d: Date): string {
++  return d.toISOString().slice(0, 10)
++}
++
++// تاريخ اليوم الحالي بتوقيت بغداد (يُستخدم عند تفعيل التذكير وقت النشر)
++export function baghdadToday(): string {
++  return isoDay(baghdadNow())
++}
++
++// اليوم الذي تخصّه نافذة المتابعة الحالية، أو null إذا كنا خارج النافذة.
++// النافذة: من الساعة 12:00 ظهراً وحتى 3:00 فجراً اليوم التالي، وتُحسب
++// بالكامل على أنها تابعة لليوم الذي بدأت فيه (نفس يوم الظهر).
++export function activeCheckinDay(): string | null {
++  const now = baghdadNow()
++  const hour = now.getUTCHours()
++  if (hour >= 12) {
++    return isoDay(now)
++  }
++  if (hour < 3) {
++    const prevDay = new Date(now.getTime() - 24 * 60 * 60 * 1000)
++    return isoDay(prevDay)
++  }
++  return null
++}
++
++export function monthRange(month: string): { from: string; to: string } {
++  const [y, m] = month.split('-').map(Number)
++  const lastDay = new Date(y, m, 0).getDate()
++  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` }
++}

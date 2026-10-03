@@ -7,6 +7,8 @@ import { LayoutDashboard, LogIn, LogOut, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp } from '@/components/app-provider'
 import { InstallButton } from '@/components/install-button'
+import { StudyCheck } from '@/components/study-check'
+import { StudyLogDialog } from '@/components/study-log-dialog'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -36,6 +38,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/75">
+      {user && <StudyCheck />}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
         <Link href="/" className="flex min-w-0 items-center gap-3">
           <Image
@@ -57,6 +60,7 @@ export function SiteHeader() {
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
             <InstallButton />
+          {user && <StudyLogDialog />}
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger

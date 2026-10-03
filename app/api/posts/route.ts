@@ -9,6 +9,7 @@ import { handle, readJson } from '@/lib/api'
 import { listPosts } from '@/lib/posts'
 import { notifySection } from '@/lib/push'
 import { getSettings } from '@/lib/settings'
+import { matchesStudyKeyword } from '@/lib/study'
 import { isSection } from '@/lib/types'
 
 export const GET = handle(async (req: NextRequest) => {
@@ -80,5 +81,7 @@ export const POST = handle(async (req: Request) => {
     })
   })
 
-  return NextResponse.json({ id: post.id })
+  const reminderPrompt = section === 'announcements' && matchesStudyKeyword(text)
+
+  return NextResponse.json({ id: post.id, reminderPrompt })
 })

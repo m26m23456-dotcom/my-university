@@ -1,0 +1,18 @@
+diff --git a/components/study-check.tsx b/components/study-check.tsx
+index a9f139f..4a3f63c 100644
+--- a/components/study-check.tsx
++++ b/components/study-check.tsx
+@@ -46,8 +46,11 @@ export function StudyCheck() {
+   }
+ 
+   return (
+-    <Dialog open={open}>
+-      <DialogContent dir="rtl" className="text-right" showCloseButton={false}>
++    // onOpenChange هنا تجاهل مؤقت فقط (×  أو الضغط خارج النافذة): لا يُسجَّل أي
++    // تصويت ولا يُحفظ أي شيء، فتعود النافذة تظهر من جديد عند أي تحديث/دخول
++    // جديد طالما التذكير نشط والمستخدم لم يضغط أحد زرّي التصويت فعلياً.
++    <Dialog open={open} onOpenChange={(next) => !next && setDismissed(true)}>
++      <DialogContent dir="rtl" className="text-right">
+         <DialogHeader>
+           <DialogTitle>هل درست اليوم؟</DialogTitle>
+           <DialogDescription>تم تفعيل تذكير الدراسة اليوم، سجّل إجابتك.</DialogDescription>

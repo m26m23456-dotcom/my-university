@@ -65,6 +65,8 @@ export const posts = pgTable('posts', {
 export const files = pgTable('files', {
   id: text('id').primaryKey(),
   postId: integer('post_id'),
+  // 'post' = مرفق تابع لجدول posts العام، 'absence' = مرفق تابع لسجل الغياب
+  kind: text('kind').notNull().default('post'),
   name: text('name').notNull(),
   mime: text('mime').notNull(),
   size: bigint('size', { mode: 'number' }).notNull().default(0),
@@ -129,3 +131,13 @@ export const studyVotes = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.day] })],
 )
+
+// محادثة جماعية داخلية بين المالك والمشرفين فقط (سجل الغياب)
+export const absenceMessages = pgTable('absence_messages', {
+  id: serial('id').primaryKey(),
+  body: text('body').notNull().default(''),
+  authorId: text('author_id'),
+  authorName: text('author_name').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
+})

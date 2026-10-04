@@ -61,6 +61,16 @@ export type Subject = {
   postCount: number
 }
 
+export type AbsenceMessage = {
+  id: number
+  body: string
+  authorId: string | null
+  authorName: string
+  createdAt: string
+  editedAt: string | null
+  files: FileItem[]
+}
+
 export const SECTION_ACTIONS: { key: keyof SectionPermission; label: string }[] = [
   { key: 'post', label: 'النشر' },
   { key: 'edit', label: 'التعديل والحذف' },

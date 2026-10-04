@@ -40,7 +40,7 @@ export async function listPosts(opts: {
     ? await db
         .select({ id: files.id, postId: files.postId, name: files.name, mime: files.mime, size: files.size })
         .from(files)
-        .where(and(inArray(files.postId, ids), eq(files.complete, true)))
+        .where(and(inArray(files.postId, ids), eq(files.kind, 'post'), eq(files.complete, true)))
         .orderBy(asc(files.createdAt))
     : []
 
@@ -63,7 +63,10 @@ export async function listPosts(opts: {
 
 export async function deleteFilesForPosts(postIds: number[]) {
   if (!postIds.length) return
-  const fileRows = await db.select({ id: files.id }).from(files).where(inArray(files.postId, postIds))
+  const fileRows = await db
+    .select({ id: files.id })
+    .from(files)
+    .where(and(inArray(files.postId, postIds), eq(files.kind, 'post')))
   const fileIds = fileRows.map((f) => f.id)
   if (fileIds.length) {
     await db.delete(fileChunks).where(inArray(fileChunks.fileId, fileIds))

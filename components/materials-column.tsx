@@ -101,7 +101,7 @@ export function MaterialsColumn({ query }: { query: string }) {
   if (selected && !query) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b bg-secondary/50 px-2 py-1.5">
+        <div className="flex shrink-0 items-center gap-2 border-b bg-secondary/50 px-2 py-1.5">
           <Button
             size="icon-sm"
             variant="ghost"
@@ -128,7 +128,7 @@ export function MaterialsColumn({ query }: { query: string }) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {matches.length > 0 && (
-          <div className="border-b p-2">
+          <div className="shrink-0 border-b p-2">
             <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">المواد المطابقة</p>
             <div className="flex flex-wrap gap-1.5">
               {matches.map((s) => (
@@ -154,7 +154,7 @@ export function MaterialsColumn({ query }: { query: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="p-2">
+      <div className="shrink-0 p-2">
         <div role="tablist" aria-label="الكورسات" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
           {([1, 2] as const).map((c) => (
             <div

@@ -35,7 +35,7 @@ export function ColumnShell({
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
             <Icon className="size-4.5" aria-hidden="true" />
@@ -69,7 +69,7 @@ export function ColumnShell({
         </div>
       </div>
       {searchOpen && (
-        <div className="relative border-b px-3 py-2">
+        <div className="relative shrink-0 border-b px-3 py-2">
           <Search
             className="pointer-events-none absolute top-1/2 right-5 size-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"

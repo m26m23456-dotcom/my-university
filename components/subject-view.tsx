@@ -125,7 +125,7 @@ function Uploader({
   }
 
   return (
-    <div className="border-t bg-card p-2">
+    <div className="shrink-0 border-t bg-card p-2">
       <input
         ref={inputRef}
         type="file"
@@ -225,7 +225,7 @@ export function SubjectView({ subjectId }: { subjectId: number }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" aria-label="أنواع الملفات" className="grid grid-cols-3 gap-1 border-b p-2">
+      <div role="tablist" aria-label="أنواع الملفات" className="grid shrink-0 grid-cols-3 gap-1 border-b p-2">
         {KINDS.map((k) => {
           const active = k.key === kind
           return (

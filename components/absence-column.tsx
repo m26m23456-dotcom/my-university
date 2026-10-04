@@ -13,7 +13,7 @@ export function AbsenceColumn({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2.5">
+      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
           <ShieldAlert className="size-4.5" aria-hidden="true" />
         </span>

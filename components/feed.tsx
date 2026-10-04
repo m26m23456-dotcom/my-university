@@ -53,15 +53,20 @@ export function Feed({
   const [highlighted, setHighlighted] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastCount = useRef(0)
+  const lastPinned = useRef(false)
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el || query) return
-    if (posts.length !== lastCount.current) {
+    const hasPin = pinned.length > 0
+    // نعيد المحاذاة لأسفل أيضاً عند ظهور/اختفاء شريط التثبيت، لأن ذلك يغيّر
+    // المساحة المتاحة لقائمة الرسائل فيسبب إزاحة بصرية إن لم نصحّحها فوراً.
+    if (posts.length !== lastCount.current || hasPin !== lastPinned.current) {
       el.scrollTop = el.scrollHeight
       lastCount.current = posts.length
+      lastPinned.current = hasPin
     }
-  }, [posts.length, query])
+  }, [posts.length, pinned.length, query])
 
   const activePin = pinned.length ? pinned[pinIndex % pinned.length] : null
 
@@ -97,7 +102,7 @@ export function Feed({
         <button
           type="button"
           onClick={jumpToPin}
-          className="flex items-center gap-2 border-b bg-card px-3 py-2 text-right hover:bg-secondary/60"
+          className="flex shrink-0 items-center gap-2 border-b bg-card px-3 py-2 text-right hover:bg-secondary/60"
         >
           <span className="h-8 w-0.5 shrink-0 rounded-full bg-gold" aria-hidden="true" />
           <Pin className="size-4 shrink-0 text-gold" aria-hidden="true" />

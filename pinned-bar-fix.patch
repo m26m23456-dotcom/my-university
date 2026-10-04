@@ -1,0 +1,150 @@
+diff --git a/components/absence-chat.tsx b/components/absence-chat.tsx
+index 0ca97aa..925dff3 100644
+--- a/components/absence-chat.tsx
++++ b/components/absence-chat.tsx
+@@ -306,7 +306,7 @@ export function AbsenceChat() {
+         )}
+       </div>
+ 
+-      <div className="border-t bg-card p-2">
++      <div className="shrink-0 border-t bg-card p-2">
+         {pending.length > 0 && (
+           <ul className="scrollbar-thin mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="الملفات المرفقة">
+             {pending.map((p) => (
+diff --git a/components/absence-column.tsx b/components/absence-column.tsx
+index 412c7e9..61d0f20 100644
+--- a/components/absence-column.tsx
++++ b/components/absence-column.tsx
+@@ -13,7 +13,7 @@ export function AbsenceColumn({ className }: { className?: string }) {
+         className,
+       )}
+     >
+-      <div className="flex items-center gap-2 border-b px-3 py-2.5">
++      <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+           <ShieldAlert className="size-4.5" aria-hidden="true" />
+         </span>
+diff --git a/components/column-shell.tsx b/components/column-shell.tsx
+index 2b0aed0..1a577d9 100644
+--- a/components/column-shell.tsx
++++ b/components/column-shell.tsx
+@@ -35,7 +35,7 @@ export function ColumnShell({
+         className,
+       )}
+     >
+-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
++      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5">
+         <div className="flex min-w-0 flex-1 items-center gap-2">
+           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+             <Icon className="size-4.5" aria-hidden="true" />
+@@ -69,7 +69,7 @@ export function ColumnShell({
+         </div>
+       </div>
+       {searchOpen && (
+-        <div className="relative border-b px-3 py-2">
++        <div className="relative shrink-0 border-b px-3 py-2">
+           <Search
+             className="pointer-events-none absolute top-1/2 right-5 size-4 -translate-y-1/2 text-muted-foreground"
+             aria-hidden="true"
+diff --git a/components/composer.tsx b/components/composer.tsx
+index cd8a221..a52009a 100644
+--- a/components/composer.tsx
++++ b/components/composer.tsx
+@@ -101,7 +101,7 @@ export function Composer({
+   }
+ 
+   return (
+-    <div className="border-t bg-card p-2">
++    <div className="shrink-0 border-t bg-card p-2">
+       {pending.length > 0 && (
+         <ul className="scrollbar-thin mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="الملفات المرفقة">
+           {pending.map((p) => (
+diff --git a/components/feed.tsx b/components/feed.tsx
+index 2af5825..8ce42cf 100644
+--- a/components/feed.tsx
++++ b/components/feed.tsx
+@@ -53,15 +53,20 @@ export function Feed({
+   const [highlighted, setHighlighted] = useState<number | null>(null)
+   const scrollRef = useRef<HTMLDivElement>(null)
+   const lastCount = useRef(0)
++  const lastPinned = useRef(false)
+ 
+   useEffect(() => {
+     const el = scrollRef.current
+     if (!el || query) return
+-    if (posts.length !== lastCount.current) {
++    const hasPin = pinned.length > 0
++    // نعيد المحاذاة لأسفل أيضاً عند ظهور/اختفاء شريط التثبيت، لأن ذلك يغيّر
++    // المساحة المتاحة لقائمة الرسائل فيسبب إزاحة بصرية إن لم نصحّحها فوراً.
++    if (posts.length !== lastCount.current || hasPin !== lastPinned.current) {
+       el.scrollTop = el.scrollHeight
+       lastCount.current = posts.length
++      lastPinned.current = hasPin
+     }
+-  }, [posts.length, query])
++  }, [posts.length, pinned.length, query])
+ 
+   const activePin = pinned.length ? pinned[pinIndex % pinned.length] : null
+ 
+@@ -97,7 +102,7 @@ export function Feed({
+         <button
+           type="button"
+           onClick={jumpToPin}
+-          className="flex items-center gap-2 border-b bg-card px-3 py-2 text-right hover:bg-secondary/60"
++          className="flex shrink-0 items-center gap-2 border-b bg-card px-3 py-2 text-right hover:bg-secondary/60"
+         >
+           <span className="h-8 w-0.5 shrink-0 rounded-full bg-gold" aria-hidden="true" />
+           <Pin className="size-4 shrink-0 text-gold" aria-hidden="true" />
+diff --git a/components/materials-column.tsx b/components/materials-column.tsx
+index 3342c6b..eba44ce 100644
+--- a/components/materials-column.tsx
++++ b/components/materials-column.tsx
+@@ -101,7 +101,7 @@ export function MaterialsColumn({ query }: { query: string }) {
+   if (selected && !query) {
+     return (
+       <div className="flex min-h-0 flex-1 flex-col">
+-        <div className="flex items-center gap-2 border-b bg-secondary/50 px-2 py-1.5">
++        <div className="flex shrink-0 items-center gap-2 border-b bg-secondary/50 px-2 py-1.5">
+           <Button
+             size="icon-sm"
+             variant="ghost"
+@@ -128,7 +128,7 @@ export function MaterialsColumn({ query }: { query: string }) {
+     return (
+       <div className="flex min-h-0 flex-1 flex-col">
+         {matches.length > 0 && (
+-          <div className="border-b p-2">
++          <div className="shrink-0 border-b p-2">
+             <p className="px-1 pb-1 text-xs font-medium text-muted-foreground">المواد المطابقة</p>
+             <div className="flex flex-wrap gap-1.5">
+               {matches.map((s) => (
+@@ -154,7 +154,7 @@ export function MaterialsColumn({ query }: { query: string }) {
+ 
+   return (
+     <div className="flex min-h-0 flex-1 flex-col">
+-      <div className="p-2">
++      <div className="shrink-0 p-2">
+         <div role="tablist" aria-label="الكورسات" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+           {([1, 2] as const).map((c) => (
+             <div
+diff --git a/components/subject-view.tsx b/components/subject-view.tsx
+index 7682a22..cc1efde 100644
+--- a/components/subject-view.tsx
++++ b/components/subject-view.tsx
+@@ -125,7 +125,7 @@ function Uploader({
+   }
+ 
+   return (
+-    <div className="border-t bg-card p-2">
++    <div className="shrink-0 border-t bg-card p-2">
+       <input
+         ref={inputRef}
+         type="file"
+@@ -225,7 +225,7 @@ export function SubjectView({ subjectId }: { subjectId: number }) {
+ 
+   return (
+     <div className="flex min-h-0 flex-1 flex-col">
+-      <div role="tablist" aria-label="أنواع الملفات" className="grid grid-cols-3 gap-1 border-b p-2">
++      <div role="tablist" aria-label="أنواع الملفات" className="grid shrink-0 grid-cols-3 gap-1 border-b p-2">
+         {KINDS.map((k) => {
+           const active = k.key === kind
+           return (

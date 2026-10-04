@@ -101,7 +101,7 @@ export function Composer({
   }
 
   return (
-    <div className="border-t bg-card p-2">
+    <div className="shrink-0 border-t bg-card p-2">
       {pending.length > 0 && (
         <ul className="scrollbar-thin mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="الملفات المرفقة">
           {pending.map((p) => (

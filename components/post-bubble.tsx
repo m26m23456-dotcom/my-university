@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -76,6 +77,7 @@ export function PostBubble({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [draft, setDraft] = useState(post.body)
   const [busy, setBusy] = useState(false)
+  const [reminderPrompt, setReminderPrompt] = useState(false)
 
   const media = post.files.filter((f) => f.mime.startsWith('image/') || f.mime.startsWith('video/'))
   const docs = post.files.filter((f) => !media.includes(f))
@@ -94,6 +96,35 @@ export function PostBubble({
       return false
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function saveEdit() {
+    setBusy(true)
+    try {
+      const res = await api<{ ok: boolean; reminderPrompt?: boolean }>(
+        `/api/posts/${post.id}`,
+        'PATCH',
+        { body: draft },
+      )
+      toast.success('تم حفظ التعديل')
+      onChanged()
+      setEditOpen(false)
+      if (res.reminderPrompt) setReminderPrompt(true)
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function answerReminder(activate: boolean) {
+    setReminderPrompt(false)
+    try {
+      await api('/api/study/activate', 'POST', { postId: post.id, activate })
+      if (activate) toast.success('تم تفعيل تذكير الدراسة لهذا اليوم')
+    } catch (error) {
+      toast.error((error as Error).message)
     }
   }
 
@@ -247,18 +278,27 @@ export function PostBubble({
             aria-label="نص المنشور"
           />
           <DialogFooter>
-            <Button
-              disabled={busy}
-              onClick={async () => {
-                const ok = await run(
-                  () => api(`/api/posts/${post.id}`, 'PATCH', { body: draft }),
-                  'تم حفظ التعديل',
-                )
-                if (ok) setEditOpen(false)
-              }}
-            >
+            <Button disabled={busy} onClick={saveEdit}>
               حفظ
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reminderPrompt} onOpenChange={(open) => !open && answerReminder(false)}>
+        <DialogContent dir="rtl" className="text-right">
+          <DialogHeader>
+            <DialogTitle>تذكير الدراسة</DialogTitle>
+            <DialogDescription>
+              هل تريد تفعيل التذكير اليوم؟ سيصل سؤال &quot;هل درست اليوم؟&quot; للمشرفين والمالك بين
+              الساعة 12 ظهراً و 3 فجراً.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => answerReminder(false)}>
+              لا
+            </Button>
+            <Button onClick={() => answerReminder(true)}>اي</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

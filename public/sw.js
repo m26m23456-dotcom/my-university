@@ -1,4 +1,8 @@
 const CACHE = 'my-university-v3'
+// ملفات (مواد/تبليغات/مهمات) حفظها المستخدم يدوياً "للعرض بدون نت" — راجع
+// components/save-offline-button.tsx حيث يُكتب إليها مباشرة من الصفحة.
+const FILES_CACHE = 'offline-files'
+const KEEP_CACHES = [CACHE, FILES_CACHE]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -13,13 +17,33 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => !KEEP_CACHES.includes(k)).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   )
 })
 
-self.addEventListener('fetch', () => {
-  // لا نعترض طلبات فتح الصفحات إطلاقًا — نترك المتصفح يتولى الشبكة وإعادة
+self.addEventListener('fetch', (event) => {
+  const req = event.request
+  if (req.method !== 'GET') return
+  const url = new URL(req.url)
+
+  if (url.pathname.startsWith('/api/files/')) {
+    // نفضّل الشبكة دوماً حتى تبقى الملفات محدّثة ويعمل التمرير (Range) أثناء
+    // تشغيل الفيديو بشكل طبيعي، ونرجع للنسخة المحفوظة محلياً فقط عند تعذّر
+    // الوصول للشبكة (بدون نت) — وفقط للملفات التي ضغط المستخدم "حفظ" عليها.
+    event.respondWith(
+      fetch(req).catch(async () => {
+        const cache = await caches.open(FILES_CACHE)
+        const cached = await cache.match(url.origin + url.pathname)
+        if (cached) return cached
+        return Response.error()
+      }),
+    )
+    return
+  }
+  // لا نعترض طلبات فتح الصفحات أو أي طلب آخر — نترك المتصفح يتولى الشبكة وإعادة
   // المحاولة تلقائيًا، وهذا أوثق من أي منطق نكتبه هنا.
 })
 

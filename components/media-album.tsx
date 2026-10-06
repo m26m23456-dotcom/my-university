@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, Play } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { SaveOfflineButton } from '@/components/save-offline-button'
 import { fileUrl } from '@/lib/fetcher'
 import type { FileItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -62,7 +63,15 @@ function Tile({
 
 const MAX_VISIBLE = 9
 
-export function MediaAlbum({ items }: { items: FileItem[] }) {
+export function MediaAlbum({
+  items,
+  allowOffline = true,
+}: {
+  items: FileItem[]
+  // إيقاف زر "حفظ بدون نت" في سجل الغياب تحديداً — الميزة مخصّصة للمواد
+  // والتبليغات والمهمات فقط.
+  allowOffline?: boolean
+}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   if (!items.length) return null
 
@@ -191,13 +200,21 @@ export function MediaAlbum({ items }: { items: FileItem[] }) {
               </Button>
             </div>
             {current && (
-              <a
-                href={fileUrl(current.id, true)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/90 hover:bg-white/10"
-              >
-                <Download className="size-4" aria-hidden="true" />
-                تنزيل
-              </a>
+              <div className="flex items-center gap-1">
+                {allowOffline && (
+                  <SaveOfflineButton
+                    url={fileUrl(current.id)}
+                    className="text-white hover:bg-white/10"
+                  />
+                )}
+                <a
+                  href={fileUrl(current.id, true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/90 hover:bg-white/10"
+                >
+                  <Download className="size-4" aria-hidden="true" />
+                  تنزيل
+                </a>
+              </div>
             )}
           </div>
         </DialogContent>

@@ -117,7 +117,7 @@ function Bubble({
         </div>
       )}
 
-      {media.length > 0 && <MediaAlbum items={media} />}
+      {media.length > 0 && <MediaAlbum items={media} allowOffline={false} />}
 
       {docs.length > 0 && (
         <ul className={cn('flex flex-col gap-1.5', media.length > 0 && 'mt-1.5')}>

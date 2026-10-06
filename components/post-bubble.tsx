@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SaveOfflineButton } from '@/components/save-offline-button'
 import { Textarea } from '@/components/ui/textarea'
 import { api, fileUrl, formatBytes } from '@/lib/fetcher'
 import { can, type Post } from '@/lib/types'
@@ -227,6 +228,7 @@ export function PostBubble({
                 </span>
               </div>
               <div className="flex shrink-0 items-center">
+                <SaveOfflineButton url={fileUrl(doc.id)} className="text-primary" />
                 <a
                   href={fileUrl(doc.id)}
                   target="_blank"

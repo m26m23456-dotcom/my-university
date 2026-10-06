@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import useSWR from 'swr'
-import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX } from 'lucide-react'
+import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX, WifiOff } from 'lucide-react'
 import { useApp } from '@/components/app-provider'
 import { Composer } from '@/components/composer'
 import { PostBubble } from '@/components/post-bubble'
@@ -11,6 +11,14 @@ import { Button } from '@/components/ui/button'
 import { can, type Post, type Section } from '@/lib/types'
 
 const dayFormat = new Intl.DateTimeFormat('ar-IQ', { weekday: 'long', day: 'numeric', month: 'long' })
+const savedAtFormat = new Intl.DateTimeFormat('ar-IQ', {
+  day: 'numeric',
+  month: 'long',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+type Snapshot = { posts: Post[]; savedAt: string }
 
 function dayKey(iso: string) {
   const d = new Date(iso)
@@ -42,11 +50,45 @@ export function Feed({
   if (query.trim()) params.set('q', query.trim())
   const key = `/api/posts?${params.toString()}`
 
-  const { data, isLoading, mutate } = useSWR<{ posts: Post[] }>(key, fetcher, {
+  const { data, error, isLoading, mutate } = useSWR<{ posts: Post[] }>(key, fetcher, {
     refreshInterval: 30000,
     keepPreviousData: true,
   })
-  const rawPosts = data?.posts ?? []
+
+  // نحفظ آخر نسخة ناجحة محلياً (localStorage) حتى يقدر المستخدم يشاهدها عند
+  // فتح التطبيق المثبّت بدون نت من جديد (قبل نجاح أي طلب شبكة جديد).
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !data) return
+    try {
+      window.localStorage.setItem(
+        `offline:${key}`,
+        JSON.stringify({ posts: data.posts, savedAt: new Date().toISOString() }),
+      )
+    } catch {
+      // مساحة التخزين ممتلئة أو غير متاحة — لا داعي لإيقاف التطبيق لهذا.
+    }
+  }, [data, key])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (data || !error) {
+      setSnapshot(null)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(`offline:${key}`)
+      setSnapshot(raw ? (JSON.parse(raw) as Snapshot) : null)
+    } catch {
+      setSnapshot(null)
+    }
+  }, [data, error, key])
+
+  // بدون نت ولا بيانات حيّة بعد؟ نعرض آخر نسخة محفوظة بدلاً منها (بوضع "عرض
+  // فقط" — تعديل/تثبيت/نقل المنشورات يحتاج نتاً فعليًا).
+  const isOffline = !data && !!snapshot
+  const rawPosts = data?.posts ?? snapshot?.posts ?? []
   const posts = transform ? transform(rawPosts) : rawPosts
   const pinned = posts.filter((p) => p.pinned)
   const [pinIndex, setPinIndex] = useState(0)
@@ -101,12 +143,18 @@ export function Feed({
     mutate()
   }
 
-  const canManagePosts = can(user, section, 'edit')
+  const canManagePosts = !isOffline && can(user, section, 'edit')
 
-  const showComposer = allowCompose && !query && can(user, section, 'post')
+  const showComposer = allowCompose && !query && !isOffline && can(user, section, 'post')
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {isOffline && snapshot && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>آخر نسخة محفوظة بدون نت — {savedAtFormat.format(new Date(snapshot.savedAt))}</span>
+        </div>
+      )}
       {activePin && !query && (
         <button
           type="button"
@@ -132,7 +180,7 @@ export function Feed({
         aria-live="polite"
         aria-busy={isLoading}
       >
-        {isLoading && !data ? (
+        {isLoading && !data && !snapshot ? (
           <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             جارٍ التحميل...
@@ -173,6 +221,7 @@ export function Feed({
                   post={post}
                   onChanged={() => mutate()}
                   highlight={highlighted === post.id}
+                  readOnly={isOffline}
                   subjectLabel={
                     query && post.subjectId ? subjectNames?.get(post.subjectId) : undefined
                   }

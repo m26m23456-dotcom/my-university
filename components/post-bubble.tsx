@@ -67,11 +67,15 @@ export function PostBubble({
   onChanged,
   subjectLabel,
   highlight,
+  readOnly = false,
 }: {
   post: Post
   onChanged: () => void
   subjectLabel?: string
   highlight?: boolean
+  // true أثناء عرض نسخة محفوظة بدون نت — نخفي أزرار التعديل/التثبيت/الحذف
+  // لأنها تحتاج اتصالاً فعلياً بالشبكة.
+  readOnly?: boolean
 }) {
   const { user } = useApp()
   const [editOpen, setEditOpen] = useState(false)
@@ -137,7 +141,7 @@ export function PostBubble({
         highlight && 'ring-2 ring-gold',
       )}
     >
-      {(canEdit || canPin || post.body) && (
+      {!readOnly && (canEdit || canPin || post.body) && (
         <div className="absolute top-1.5 left-1.5 z-10">
           <DropdownMenu>
             <DropdownMenuTrigger

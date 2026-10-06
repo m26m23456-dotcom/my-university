@@ -10,6 +10,7 @@ import {
   Pencil,
   SendHorizontal,
   Trash2,
+  WifiOff,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -36,25 +37,37 @@ import type { AbsenceMessage } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const timeFormat = new Intl.DateTimeFormat('ar-IQ', { hour: 'numeric', minute: '2-digit' })
+const savedAtFormat = new Intl.DateTimeFormat('ar-IQ', {
+  day: 'numeric',
+  month: 'long',
+  hour: 'numeric',
+  minute: '2-digit',
+})
 const ACCEPT = 'application/pdf,image/*,video/mp4,video/webm,video/quicktime'
 
 type Pending = { key: string; file: File; preview: string | null; progress: number }
+type Snapshot = { messages: AbsenceMessage[]; savedAt: string }
+const SNAPSHOT_KEY = 'offline:/api/absence'
 
 function Bubble({
   message,
   mine,
   onChanged,
+  readOnly = false,
 }: {
   message: AbsenceMessage
   mine: boolean
   onChanged: () => void
+  // true أثناء عرض آخر نسخة محفوظة بدون نت — نخفي أزرار التعديل/الحذف لأنها
+  // تحتاج اتصالاً فعلياً بالشبكة.
+  readOnly?: boolean
 }) {
   const { user } = useApp()
   const [editOpen, setEditOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [draft, setDraft] = useState(message.body)
   const [busy, setBusy] = useState(false)
-  const canManage = mine || user?.role === 'owner'
+  const canManage = !readOnly && (mine || user?.role === 'owner')
   const media = message.files.filter((f) => f.mime.startsWith('image/') || f.mime.startsWith('video/'))
   const docs = message.files.filter((f) => !media.includes(f))
 
@@ -215,11 +228,44 @@ function Bubble({
 
 export function AbsenceChat() {
   const { user } = useApp()
-  const { data, isLoading, mutate } = useSWR<{ messages: AbsenceMessage[] }>('/api/absence', fetcher, {
-    refreshInterval: 15000,
-    keepPreviousData: true,
-  })
-  const messages = data?.messages ?? []
+  const { data, error, isLoading, mutate } = useSWR<{ messages: AbsenceMessage[] }>(
+    '/api/absence',
+    fetcher,
+    { refreshInterval: 15000, keepPreviousData: true },
+  )
+
+  // نحفظ آخر نسخة ناجحة محلياً حتى يقدر المستخدم يشاهد سجل الغياب عند فتح
+  // التطبيق المثبّت بدون نت من جديد (قبل نجاح أي طلب شبكة جديد).
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !data) return
+    try {
+      window.localStorage.setItem(
+        SNAPSHOT_KEY,
+        JSON.stringify({ messages: data.messages, savedAt: new Date().toISOString() }),
+      )
+    } catch {
+      // مساحة التخزين ممتلئة أو غير متاحة — لا داعي لإيقاف التطبيق لهذا.
+    }
+  }, [data])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (data || !error) {
+      setSnapshot(null)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(SNAPSHOT_KEY)
+      setSnapshot(raw ? (JSON.parse(raw) as Snapshot) : null)
+    } catch {
+      setSnapshot(null)
+    }
+  }, [data, error])
+
+  const isOffline = !data && !!snapshot
+  const messages = data?.messages ?? snapshot?.messages ?? []
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastCount = useRef(0)
 
@@ -286,13 +332,19 @@ export function AbsenceChat() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {isOffline && snapshot && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>آخر نسخة محفوظة بدون نت — {savedAtFormat.format(new Date(snapshot.savedAt))}</span>
+        </div>
+      )}
       <div
         ref={scrollRef}
         className="chat-pattern scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-4"
         aria-live="polite"
         aria-busy={isLoading}
       >
-        {isLoading && !data ? (
+        {isLoading && !data && !snapshot ? (
           <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             جارٍ التحميل...
@@ -301,11 +353,18 @@ export function AbsenceChat() {
           <div className="m-auto text-sm text-muted-foreground">لا توجد رسائل بعد</div>
         ) : (
           messages.map((m) => (
-            <Bubble key={m.id} message={m} mine={m.authorId === user?.id} onChanged={() => mutate()} />
+            <Bubble
+              key={m.id}
+              message={m}
+              mine={m.authorId === user?.id}
+              onChanged={() => mutate()}
+              readOnly={isOffline}
+            />
           ))
         )}
       </div>
 
+      {!isOffline && (
       <div className="shrink-0 border-t bg-card p-2">
         {pending.length > 0 && (
           <ul className="scrollbar-thin mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="الملفات المرفقة">
@@ -408,6 +467,7 @@ export function AbsenceChat() {
           </Button>
         </div>
       </div>
+      )}
     </div>
   )
 }

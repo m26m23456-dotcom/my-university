@@ -1,0 +1,391 @@
+diff --git a/components/absence-chat.tsx b/components/absence-chat.tsx
+index 52d2dbb..0e3f151 100644
+--- a/components/absence-chat.tsx
++++ b/components/absence-chat.tsx
+@@ -10,6 +10,7 @@ import {
+   Pencil,
+   SendHorizontal,
+   Trash2,
++  WifiOff,
+   X,
+ } from 'lucide-react'
+ import { toast } from 'sonner'
+@@ -36,25 +37,37 @@ import type { AbsenceMessage } from '@/lib/types'
+ import { cn } from '@/lib/utils'
+ 
+ const timeFormat = new Intl.DateTimeFormat('ar-IQ', { hour: 'numeric', minute: '2-digit' })
++const savedAtFormat = new Intl.DateTimeFormat('ar-IQ', {
++  day: 'numeric',
++  month: 'long',
++  hour: 'numeric',
++  minute: '2-digit',
++})
+ const ACCEPT = 'application/pdf,image/*,video/mp4,video/webm,video/quicktime'
+ 
+ type Pending = { key: string; file: File; preview: string | null; progress: number }
++type Snapshot = { messages: AbsenceMessage[]; savedAt: string }
++const SNAPSHOT_KEY = 'offline:/api/absence'
+ 
+ function Bubble({
+   message,
+   mine,
+   onChanged,
++  readOnly = false,
+ }: {
+   message: AbsenceMessage
+   mine: boolean
+   onChanged: () => void
++  // true أثناء عرض آخر نسخة محفوظة بدون نت — نخفي أزرار التعديل/الحذف لأنها
++  // تحتاج اتصالاً فعلياً بالشبكة.
++  readOnly?: boolean
+ }) {
+   const { user } = useApp()
+   const [editOpen, setEditOpen] = useState(false)
+   const [confirmOpen, setConfirmOpen] = useState(false)
+   const [draft, setDraft] = useState(message.body)
+   const [busy, setBusy] = useState(false)
+-  const canManage = mine || user?.role === 'owner'
++  const canManage = !readOnly && (mine || user?.role === 'owner')
+   const media = message.files.filter((f) => f.mime.startsWith('image/') || f.mime.startsWith('video/'))
+   const docs = message.files.filter((f) => !media.includes(f))
+ 
+@@ -215,11 +228,44 @@ function Bubble({
+ 
+ export function AbsenceChat() {
+   const { user } = useApp()
+-  const { data, isLoading, mutate } = useSWR<{ messages: AbsenceMessage[] }>('/api/absence', fetcher, {
+-    refreshInterval: 15000,
+-    keepPreviousData: true,
+-  })
+-  const messages = data?.messages ?? []
++  const { data, error, isLoading, mutate } = useSWR<{ messages: AbsenceMessage[] }>(
++    '/api/absence',
++    fetcher,
++    { refreshInterval: 15000, keepPreviousData: true },
++  )
++
++  // نحفظ آخر نسخة ناجحة محلياً حتى يقدر المستخدم يشاهد سجل الغياب عند فتح
++  // التطبيق المثبّت بدون نت من جديد (قبل نجاح أي طلب شبكة جديد).
++  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
++
++  useEffect(() => {
++    if (typeof window === 'undefined' || !data) return
++    try {
++      window.localStorage.setItem(
++        SNAPSHOT_KEY,
++        JSON.stringify({ messages: data.messages, savedAt: new Date().toISOString() }),
++      )
++    } catch {
++      // مساحة التخزين ممتلئة أو غير متاحة — لا داعي لإيقاف التطبيق لهذا.
++    }
++  }, [data])
++
++  useEffect(() => {
++    if (typeof window === 'undefined') return
++    if (data || !error) {
++      setSnapshot(null)
++      return
++    }
++    try {
++      const raw = window.localStorage.getItem(SNAPSHOT_KEY)
++      setSnapshot(raw ? (JSON.parse(raw) as Snapshot) : null)
++    } catch {
++      setSnapshot(null)
++    }
++  }, [data, error])
++
++  const isOffline = !data && !!snapshot
++  const messages = data?.messages ?? snapshot?.messages ?? []
+   const scrollRef = useRef<HTMLDivElement>(null)
+   const lastCount = useRef(0)
+ 
+@@ -286,13 +332,19 @@ export function AbsenceChat() {
+ 
+   return (
+     <div className="flex min-h-0 flex-1 flex-col">
++      {isOffline && snapshot && (
++        <div className="flex shrink-0 items-center gap-2 border-b bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
++          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
++          <span>آخر نسخة محفوظة بدون نت — {savedAtFormat.format(new Date(snapshot.savedAt))}</span>
++        </div>
++      )}
+       <div
+         ref={scrollRef}
+         className="chat-pattern scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-4"
+         aria-live="polite"
+         aria-busy={isLoading}
+       >
+-        {isLoading && !data ? (
++        {isLoading && !data && !snapshot ? (
+           <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground">
+             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+             جارٍ التحميل...
+@@ -301,11 +353,18 @@ export function AbsenceChat() {
+           <div className="m-auto text-sm text-muted-foreground">لا توجد رسائل بعد</div>
+         ) : (
+           messages.map((m) => (
+-            <Bubble key={m.id} message={m} mine={m.authorId === user?.id} onChanged={() => mutate()} />
++            <Bubble
++              key={m.id}
++              message={m}
++              mine={m.authorId === user?.id}
++              onChanged={() => mutate()}
++              readOnly={isOffline}
++            />
+           ))
+         )}
+       </div>
+ 
++      {!isOffline && (
+       <div className="shrink-0 border-t bg-card p-2">
+         {pending.length > 0 && (
+           <ul className="scrollbar-thin mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="الملفات المرفقة">
+@@ -408,6 +467,7 @@ export function AbsenceChat() {
+           </Button>
+         </div>
+       </div>
++      )}
+     </div>
+   )
+ }
+diff --git a/components/feed.tsx b/components/feed.tsx
+index 7d5b5e0..74da05e 100644
+--- a/components/feed.tsx
++++ b/components/feed.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+ import useSWR from 'swr'
+-import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX } from 'lucide-react'
++import { ArrowDown, ArrowUp, Inbox, Loader2, Pin, SearchX, WifiOff } from 'lucide-react'
+ import { useApp } from '@/components/app-provider'
+ import { Composer } from '@/components/composer'
+ import { PostBubble } from '@/components/post-bubble'
+@@ -11,6 +11,14 @@ import { Button } from '@/components/ui/button'
+ import { can, type Post, type Section } from '@/lib/types'
+ 
+ const dayFormat = new Intl.DateTimeFormat('ar-IQ', { weekday: 'long', day: 'numeric', month: 'long' })
++const savedAtFormat = new Intl.DateTimeFormat('ar-IQ', {
++  day: 'numeric',
++  month: 'long',
++  hour: 'numeric',
++  minute: '2-digit',
++})
++
++type Snapshot = { posts: Post[]; savedAt: string }
+ 
+ function dayKey(iso: string) {
+   const d = new Date(iso)
+@@ -42,11 +50,45 @@ export function Feed({
+   if (query.trim()) params.set('q', query.trim())
+   const key = `/api/posts?${params.toString()}`
+ 
+-  const { data, isLoading, mutate } = useSWR<{ posts: Post[] }>(key, fetcher, {
++  const { data, error, isLoading, mutate } = useSWR<{ posts: Post[] }>(key, fetcher, {
+     refreshInterval: 30000,
+     keepPreviousData: true,
+   })
+-  const rawPosts = data?.posts ?? []
++
++  // نحفظ آخر نسخة ناجحة محلياً (localStorage) حتى يقدر المستخدم يشاهدها عند
++  // فتح التطبيق المثبّت بدون نت من جديد (قبل نجاح أي طلب شبكة جديد).
++  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
++
++  useEffect(() => {
++    if (typeof window === 'undefined' || !data) return
++    try {
++      window.localStorage.setItem(
++        `offline:${key}`,
++        JSON.stringify({ posts: data.posts, savedAt: new Date().toISOString() }),
++      )
++    } catch {
++      // مساحة التخزين ممتلئة أو غير متاحة — لا داعي لإيقاف التطبيق لهذا.
++    }
++  }, [data, key])
++
++  useEffect(() => {
++    if (typeof window === 'undefined') return
++    if (data || !error) {
++      setSnapshot(null)
++      return
++    }
++    try {
++      const raw = window.localStorage.getItem(`offline:${key}`)
++      setSnapshot(raw ? (JSON.parse(raw) as Snapshot) : null)
++    } catch {
++      setSnapshot(null)
++    }
++  }, [data, error, key])
++
++  // بدون نت ولا بيانات حيّة بعد؟ نعرض آخر نسخة محفوظة بدلاً منها (بوضع "عرض
++  // فقط" — تعديل/تثبيت/نقل المنشورات يحتاج نتاً فعليًا).
++  const isOffline = !data && !!snapshot
++  const rawPosts = data?.posts ?? snapshot?.posts ?? []
+   const posts = transform ? transform(rawPosts) : rawPosts
+   const pinned = posts.filter((p) => p.pinned)
+   const [pinIndex, setPinIndex] = useState(0)
+@@ -101,12 +143,18 @@ export function Feed({
+     mutate()
+   }
+ 
+-  const canManagePosts = can(user, section, 'edit')
++  const canManagePosts = !isOffline && can(user, section, 'edit')
+ 
+-  const showComposer = allowCompose && !query && can(user, section, 'post')
++  const showComposer = allowCompose && !query && !isOffline && can(user, section, 'post')
+ 
+   return (
+     <div className="flex min-h-0 flex-1 flex-col">
++      {isOffline && snapshot && (
++        <div className="flex shrink-0 items-center gap-2 border-b bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
++          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
++          <span>آخر نسخة محفوظة بدون نت — {savedAtFormat.format(new Date(snapshot.savedAt))}</span>
++        </div>
++      )}
+       {activePin && !query && (
+         <button
+           type="button"
+@@ -132,7 +180,7 @@ export function Feed({
+         aria-live="polite"
+         aria-busy={isLoading}
+       >
+-        {isLoading && !data ? (
++        {isLoading && !data && !snapshot ? (
+           <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground">
+             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+             جارٍ التحميل...
+@@ -173,6 +221,7 @@ export function Feed({
+                   post={post}
+                   onChanged={() => mutate()}
+                   highlight={highlighted === post.id}
++                  readOnly={isOffline}
+                   subjectLabel={
+                     query && post.subjectId ? subjectNames?.get(post.subjectId) : undefined
+                   }
+diff --git a/components/post-bubble.tsx b/components/post-bubble.tsx
+index 8a76971..94bdc23 100644
+--- a/components/post-bubble.tsx
++++ b/components/post-bubble.tsx
+@@ -67,11 +67,15 @@ export function PostBubble({
+   onChanged,
+   subjectLabel,
+   highlight,
++  readOnly = false,
+ }: {
+   post: Post
+   onChanged: () => void
+   subjectLabel?: string
+   highlight?: boolean
++  // true أثناء عرض نسخة محفوظة بدون نت — نخفي أزرار التعديل/التثبيت/الحذف
++  // لأنها تحتاج اتصالاً فعلياً بالشبكة.
++  readOnly?: boolean
+ }) {
+   const { user } = useApp()
+   const [editOpen, setEditOpen] = useState(false)
+@@ -137,7 +141,7 @@ export function PostBubble({
+         highlight && 'ring-2 ring-gold',
+       )}
+     >
+-      {(canEdit || canPin || post.body) && (
++      {!readOnly && (canEdit || canPin || post.body) && (
+         <div className="absolute top-1.5 left-1.5 z-10">
+           <DropdownMenu>
+             <DropdownMenuTrigger
+diff --git a/public/sw.js b/public/sw.js
+index c734724..c215502 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -2,13 +2,26 @@ const CACHE = 'my-university-v3'
+ // ملفات (مواد/تبليغات/مهمات) حفظها المستخدم يدوياً "للعرض بدون نت" — راجع
+ // components/save-offline-button.tsx حيث يُكتب إليها مباشرة من الصفحة.
+ const FILES_CACHE = 'offline-files'
+-const KEEP_CACHES = [CACHE, FILES_CACHE]
++// "هيكل" التطبيق (صفحات HTML عند التنقل) — يسمح بفتح التطبيق المثبّت حتى بدون
++// نت، آخذين بعين الاعتبار أنها قد تُظهر حالة تسجيل دخول قديمة للحظة لحين
++// استرجاع الاتصال بالنت من جديد.
++const SHELL_CACHE = 'app-shell-v1'
++// أصول ثابتة (JS/CSS/خطوط/صور) من نفس الموقع — أسماؤها فريدة لكل نسخة بناء
++// فالاعتماد على النسخة المخزّنة أولاً آمن تماماً.
++const STATIC_CACHE = 'static-assets-v1'
++const KEEP_CACHES = [CACHE, FILES_CACHE, SHELL_CACHE, STATIC_CACHE]
+ 
+ self.addEventListener('install', (event) => {
+   event.waitUntil(
+     caches
+       .open(CACHE)
+       .then((cache) => cache.addAll(['/logo.png']))
++      .then(() =>
++        caches
++          .open(SHELL_CACHE)
++          .then((cache) => cache.add('/').catch(() => {}))
++          .catch(() => {}),
++      )
+       .then(() => self.skipWaiting()),
+   )
+ })
+@@ -29,6 +42,13 @@ self.addEventListener('fetch', (event) => {
+   if (req.method !== 'GET') return
+   const url = new URL(req.url)
+ 
++  // طلبات الـ API (عدا الملفات المعالجة أدناه) تبقى متّصلة بالشبكة دوماً —
++  // تحمل بيانات ومصادقة محدّثة لحظياً ولا يصح تخزينها هنا أبداً. فشل الشبكة
++  // لها يبقى فشلاً طبيعياً (هذا متوقّع ومطلوب بدون نت).
++  if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/files/')) {
++    return
++  }
++
+   if (url.pathname.startsWith('/api/files/')) {
+     // نفضّل الشبكة دوماً حتى تبقى الملفات محدّثة ويعمل التمرير (Range) أثناء
+     // تشغيل الفيديو بشكل طبيعي، ونرجع للنسخة المحفوظة محلياً فقط عند تعذّر
+@@ -43,8 +63,49 @@ self.addEventListener('fetch', (event) => {
+     )
+     return
+   }
+-  // لا نعترض طلبات فتح الصفحات أو أي طلب آخر — نترك المتصفح يتولى الشبكة وإعادة
+-  // المحاولة تلقائيًا، وهذا أوثق من أي منطق نكتبه هنا.
++
++  // فتح التطبيق نفسه (تنقّل بين الصفحات): نفضّل الشبكة دوماً لأنها تحمل حالة
++  // تسجيل الدخول الحالية، ونحفظ كل استجابة ناجحة كـ"آخر نسخة من هيكل التطبيق"
++  // ليبقى بإمكان فتح التطبيق حتى بدون نت من البداية.
++  if (req.mode === 'navigate') {
++    event.respondWith(
++      fetch(req)
++        .then((res) => {
++          const copy = res.clone()
++          caches.open(SHELL_CACHE).then((cache) => cache.put(req.url, copy))
++          return res
++        })
++        .catch(async () => {
++          const cache = await caches.open(SHELL_CACHE)
++          const cached = (await cache.match(req.url)) || (await cache.match('/'))
++          if (cached) return cached
++          return Response.error()
++        }),
++    )
++    return
++  }
++
++  // أصول ثابتة من نفس الموقع (JS/CSS/خطوط/صور) — أسماؤها فريدة لكل نسخة بناء،
++  // فالاعتماد على النسخة المخزّنة أولاً آمن تماماً ويجعل فتح التطبيق بدون نت
++  // أسرع وأكثر ثباتاً.
++  if (
++    url.origin === self.location.origin &&
++    /\.(js|css|woff2?|png|jpg|jpeg|svg|ico)$/.test(url.pathname)
++  ) {
++    event.respondWith(
++      caches.open(STATIC_CACHE).then(async (cache) => {
++        const cached = await cache.match(req)
++        if (cached) return cached
++        try {
++          const res = await fetch(req)
++          cache.put(req, res.clone())
++          return res
++        } catch {
++          return Response.error()
++        }
++      }),
++    )
++  }
+ })
+ 
+ self.addEventListener('push', (event) => {

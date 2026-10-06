@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
   ArrowDown,
@@ -40,6 +40,38 @@ import { cn } from '@/lib/utils'
 
 type SubjectsResponse = { subjects: Subject[] }
 
+// نحفظ آخر قائمة مواد ناجحة محلياً (localStorage) حتى يقدر المستخدم يدخل على
+// مادة ويشاهد ملفاتها المحفوظة سابقاً عند فتح التطبيق بدون نت — بدون هذا لا
+// تظهر أي مادة أصلاً فلا يقدر يدخل لمحتواها المحفوظ.
+function useOfflineSubjects(key: string, data: SubjectsResponse | undefined, error: unknown) {
+  const [snapshot, setSnapshot] = useState<SubjectsResponse | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !data) return
+    try {
+      window.localStorage.setItem(`offline:${key}`, JSON.stringify(data))
+    } catch {
+      // مساحة التخزين ممتلئة أو غير متاحة — لا داعي لإيقاف التطبيق لهذا.
+    }
+  }, [data, key])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (data || !error) {
+      setSnapshot(null)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(`offline:${key}`)
+      setSnapshot(raw ? (JSON.parse(raw) as SubjectsResponse) : null)
+    } catch {
+      setSnapshot(null)
+    }
+  }, [data, error, key])
+
+  return snapshot
+}
+
 function postCountLabel(n: number) {
   if (!n) return 'لا توجد منشورات'
   if (n === 1) return 'منشور واحد'
@@ -61,13 +93,22 @@ export function MaterialsColumn({ query }: { query: string }) {
 
   const course1 = useSWR<SubjectsResponse>('/api/subjects?course=1', fetcher)
   const course2 = useSWR<SubjectsResponse>('/api/subjects?course=2', fetcher)
+  const course1Snapshot = useOfflineSubjects('/api/subjects?course=1', course1.data, course1.error)
+  const course2Snapshot = useOfflineSubjects('/api/subjects?course=2', course2.data, course2.error)
   const current = course === 1 ? course1 : course2
-  const subjects = current.data?.subjects ?? []
-  const canManage = can(user, 'materials', 'edit')
+  const currentSnapshot = course === 1 ? course1Snapshot : course2Snapshot
+  const subjects = current.data?.subjects ?? currentSnapshot?.subjects ?? []
+  // بدون نت ولا بيانات حيّة؟ نعرض آخر قائمة محفوظة (عرض فقط — الإضافة/التعديل/
+  // الحذف/النقل تحتاج نتاً فعليًا).
+  const isOffline = !current.data && !!currentSnapshot
+  const canManage = !isOffline && can(user, 'materials', 'edit')
   const isOwner = user?.role === 'owner'
 
   const allNames = new Map<number, string>()
-  for (const s of [...(course1.data?.subjects ?? []), ...(course2.data?.subjects ?? [])]) {
+  for (const s of [
+    ...(course1.data?.subjects ?? course1Snapshot?.subjects ?? []),
+    ...(course2.data?.subjects ?? course2Snapshot?.subjects ?? []),
+  ]) {
     allNames.set(s.id, `${settings.courses[s.course as 1 | 2]} · ${s.name}`)
   }
 
@@ -122,7 +163,10 @@ export function MaterialsColumn({ query }: { query: string }) {
 
   if (query) {
     const q = query.trim().toLowerCase()
-    const matches = [...(course1.data?.subjects ?? []), ...(course2.data?.subjects ?? [])].filter(
+    const matches = [
+      ...(course1.data?.subjects ?? course1Snapshot?.subjects ?? []),
+      ...(course2.data?.subjects ?? course2Snapshot?.subjects ?? []),
+    ].filter(
       (s) => s.name.toLowerCase().includes(q),
     )
     return (
@@ -195,8 +239,13 @@ export function MaterialsColumn({ query }: { query: string }) {
         </div>
       </div>
 
+      {isOffline && (
+        <div className="mx-2 mb-1.5 flex shrink-0 items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <span>آخر قائمة مواد محفوظة بدون نت</span>
+        </div>
+      )}
       <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
-        {current.isLoading ? (
+        {current.isLoading && !current.data && !currentSnapshot ? (
           <div className="m-auto flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             جارٍ التحميل...

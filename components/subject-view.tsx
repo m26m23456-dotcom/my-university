@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import useSWR from 'swr'
-import { FileText, Image as ImageIcon, Loader2, Plus, Video, X, type LucideIcon } from 'lucide-react'
+import { FileText, Image as ImageIcon, Link2, Loader2, Plus, X, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp } from '@/components/app-provider'
 import { Feed } from '@/components/feed'
@@ -11,7 +11,7 @@ import { api, fetcher, formatBytes, uploadFile } from '@/lib/fetcher'
 import { can, type Post } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-type Kind = 'pdf' | 'image' | 'video'
+type Kind = 'pdf' | 'image' | 'link'
 
 const KINDS: {
   key: Kind
@@ -38,36 +38,34 @@ const KINDS: {
     empty: 'لا توجد صور بعد',
   },
   {
-    key: 'video',
-    label: 'الفيديوهات',
-    icon: Video,
-    accept: 'video/mp4,video/webm,video/quicktime',
-    addLabel: 'إضافة فيديو',
-    empty: 'لا توجد فيديوهات بعد',
+    key: 'link',
+    label: 'روابط',
+    icon: Link2,
+    accept: '',
+    addLabel: '',
+    empty: 'لا توجد روابط بعد',
   },
 ]
 
-function fileKind(mime: string): Kind {
-  if (mime.startsWith('image/')) return 'image'
-  if (mime.startsWith('video/')) return 'video'
-  return 'pdf'
+function fileKind(mime: string): 'pdf' | 'image' {
+  return mime.startsWith('image/') ? 'image' : 'pdf'
 }
 
 function fileMatches(file: File, kind: Kind) {
   const type = file.type
   if (kind === 'pdf') return type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-  if (kind === 'image') return type.startsWith('image/')
-  return type.startsWith('video/')
+  return type.startsWith('image/')
 }
 
 function filterByKind(posts: Post[], kind: Kind): Post[] {
   const out: Post[] = []
   for (const post of posts) {
     if (post.files.length === 0) {
-      // منشورات نصية قديمة بلا ملفات: تبقى ظاهرة في أول تبويب حتى لا تختفي
-      if (kind === 'pdf') out.push(post)
+      // الرسائل النصية بلا ملفات (روابط وشرح) تظهر في تبويب «روابط» فقط
+      if (kind === 'link') out.push(post)
       continue
     }
+    if (kind === 'link') continue
     const files = post.files.filter((f) => fileKind(f.mime) === kind)
     if (files.length) out.push(files.length === post.files.length ? post : { ...post, files })
   }
@@ -216,8 +214,9 @@ export function SubjectView({ subjectId }: { subjectId: number }) {
     keepPreviousData: true,
   })
 
-  const counts: Record<Kind, number> = { pdf: 0, image: 0, video: 0 }
+  const counts: Record<Kind, number> = { pdf: 0, image: 0, link: 0 }
   for (const post of data?.posts ?? []) {
+    if (post.files.length === 0) counts.link++
     for (const f of post.files) counts[fileKind(f.mime)]++
   }
 
@@ -261,11 +260,12 @@ export function SubjectView({ subjectId }: { subjectId: number }) {
         key={kind}
         section="materials"
         subjectId={subjectId}
-        allowCompose={false}
+        allowCompose={kind === 'link'}
+        textOnly
         transform={(posts) => filterByKind(posts, kind)}
         emptyText={cfg.empty}
         footer={
-          can(user, 'materials', 'post') ? (
+          kind !== 'link' && can(user, 'materials', 'post') ? (
             <Uploader key={kind} kind={kind} subjectId={subjectId} onPosted={() => mutate()} />
           ) : null
         }

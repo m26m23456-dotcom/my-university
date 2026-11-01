@@ -23,10 +23,12 @@ const ACCEPT = 'application/pdf,image/*,video/mp4,video/webm,video/quicktime'
 export function Composer({
   section,
   subjectId,
+  textOnly = false,
   onPosted,
 }: {
   section: Section
   subjectId?: number
+  textOnly?: boolean
   onPosted: () => void
 }) {
   const [text, setText] = useState('')
@@ -157,23 +159,25 @@ export function Composer({
             e.target.value = ''
           }}
         />
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="shrink-0 text-muted-foreground"
-          aria-label="إرفاق ملفات (PDF، صور، فيديو)"
-          disabled={sending}
-          onClick={() => inputRef.current?.click()}
-        >
-          <Paperclip aria-hidden="true" />
-        </Button>
+        {!textOnly && (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="shrink-0 text-muted-foreground"
+            aria-label="إرفاق ملفات (PDF، صور، فيديو)"
+            disabled={sending}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Paperclip aria-hidden="true" />
+          </Button>
+        )}
         <textarea
           ref={textRef}
           value={text}
           dir="auto"
           rows={1}
-          placeholder="اكتب رسالة للنشر..."
+          placeholder={textOnly ? 'الصق الرابط واكتب شرحاً...' : 'اكتب رسالة للنشر...'}
           aria-label="نص المنشور"
           disabled={sending}
           onChange={(e) => {

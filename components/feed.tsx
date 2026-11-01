@@ -31,6 +31,7 @@ export function Feed({
   query = '',
   subjectNames,
   allowCompose = true,
+  textOnly = false,
   transform,
   footer,
   emptyText,
@@ -40,6 +41,7 @@ export function Feed({
   query?: string
   subjectNames?: Map<number, string>
   allowCompose?: boolean
+  textOnly?: boolean
   transform?: (posts: Post[]) => Post[]
   footer?: ReactNode
   emptyText?: string
@@ -233,7 +235,7 @@ export function Feed({
         )}
       </div>
 
-      {showComposer && <Composer section={section} subjectId={subjectId} onPosted={() => mutate()} />}
+      {showComposer && <Composer section={section} subjectId={subjectId} textOnly={textOnly} onPosted={() => mutate()} />}
       {footer}
     </div>
   )
